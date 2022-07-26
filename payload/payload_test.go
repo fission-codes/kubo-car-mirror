@@ -10,7 +10,7 @@ import (
 
 func TestEncodeDecode(t *testing.T) {
 
-	f := bloom.New(128, 6)
+	f := bloom.NewFilter(128, 6)
 	f.Add([]byte("one"))
 	f.Add([]byte("two"))
 	f.Add([]byte("three"))

@@ -8,7 +8,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	f := New(1000, 4)
+	f := NewFilter(1000, 4)
 
 	// Rounded to nearest power of 2
 	if f.bitSet.BitsCount() != 1024 {
@@ -44,7 +44,7 @@ func TestBasic(t *testing.T) {
 }
 
 func TestBasicUint32(t *testing.T) {
-	f := New(1000, 4)
+	f := NewFilter(1000, 4)
 	n1 := make([]byte, 4)
 	n2 := make([]byte, 4)
 	n3 := make([]byte, 4)
@@ -86,7 +86,7 @@ func TestBasicUint32(t *testing.T) {
 }
 
 func TestNewWithLowNumbers(t *testing.T) {
-	f := New(0, 0)
+	f := NewFilter(0, 0)
 	if f.HashCount() != 1 {
 		t.Errorf("%v should be 1", f.HashCount())
 	}
@@ -94,7 +94,7 @@ func TestNewWithLowNumbers(t *testing.T) {
 		t.Errorf("%v should be 1", f.BitCount())
 	}
 
-	f2 := New(2, 0)
+	f2 := NewFilter(2, 0)
 	if f2.HashCount() != 1 {
 		t.Errorf("%v should be 1", f2.HashCount())
 	}
@@ -102,7 +102,7 @@ func TestNewWithLowNumbers(t *testing.T) {
 		t.Errorf("%v should be 1", f2.BitCount())
 	}
 
-	f3 := New(3, 0)
+	f3 := NewFilter(3, 0)
 	if f3.HashCount() != 1 {
 		t.Errorf("%v should be 1", f3.HashCount())
 	}
@@ -112,14 +112,14 @@ func TestNewWithLowNumbers(t *testing.T) {
 }
 
 func TestHashCount(t *testing.T) {
-	f := New(1000, 4)
+	f := NewFilter(1000, 4)
 	if f.HashCount() != f.hashCount {
 		t.Error("not accessing HashCount() correctly")
 	}
 }
 
 func TestBitCount(t *testing.T) {
-	f := New(1000, 4)
+	f := NewFilter(1000, 4)
 	if f.BitCount() != f.bitCount {
 		t.Error("not accessing BitCount() correctly")
 	}
@@ -130,7 +130,7 @@ func TestBytes(t *testing.T) {
 	u := uint64(1)
 	binary.BigEndian.PutUint64(b, u)
 
-	f := New(8, 1)
+	f := NewFilter(8, 1)
 	expected := []byte{byte(0)}
 	if !bytes.Equal(f.Bytes(), expected) {
 		t.Errorf("expected Bytes() to be %v, got %v", expected, f.Bytes())
@@ -138,7 +138,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestFPP(t *testing.T) {
-	f := NewWithEstimates(1000, 0.001)
+	f := NewFilterWithEstimates(1000, 0.001)
 
 	for i := uint32(0); i < 1000; i++ {
 		b := make([]byte, 4)

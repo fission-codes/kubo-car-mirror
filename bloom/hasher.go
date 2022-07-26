@@ -1,4 +1,4 @@
-package hasher
+package bloom
 
 import (
 	"github.com/fission-suite/car-mirror/util"
@@ -16,7 +16,7 @@ type Hasher struct {
 	bitmask   uint64
 }
 
-func New(bitCount, hashCount uint64, data []byte) *Hasher {
+func NewHasher(bitCount, hashCount uint64, data []byte) *Hasher {
 	return &Hasher{
 		bitCount:  bitCount,
 		hashCount: hashCount,

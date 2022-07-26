@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/fission-suite/car-mirror/bitset"
-	"github.com/fission-suite/car-mirror/hasher"
 	"github.com/fission-suite/car-mirror/util"
 )
 
@@ -14,10 +13,10 @@ type Filter struct {
 	bitSet    *bitset.BitSet // bloom binary
 }
 
-// New creates a new Bloom filter with the specified number of bits and hash functions.
+// NewFilter creates a new Bloom filter with the specified number of bits and hash functions.
 // bitCount will be rounded up to the nearest positive power of 2.
 // hashCount will be set to 1 if a negative number is specified, to prevent panic.
-func New(bitCount, hashCount uint64) *Filter {
+func NewFilter(bitCount, hashCount uint64) *Filter {
 	safeBitCount := util.NextPowerOfTwo(max(1, bitCount))
 	safeHashCount := max(1, hashCount)
 	return &Filter{safeBitCount, safeHashCount, bitset.New(safeBitCount)}
@@ -32,11 +31,11 @@ func EstimateParameters(n uint64, fpp float64) (bitCount, hashCount uint64) {
 	return
 }
 
-// NewWithEstimates returns a new Bloom filter with estimated parameters based on the specified
+// NewFilterWithEstimates returns a new Bloom filter with estimated parameters based on the specified
 // number of elements and false positive probability rate.
-func NewWithEstimates(n uint64, fpp float64) *Filter {
+func NewFilterWithEstimates(n uint64, fpp float64) *Filter {
 	m, k := EstimateParameters(n, fpp)
-	return New(m, k)
+	return NewFilter(m, k)
 }
 
 // BitCount returns the filter size in bits.
@@ -58,7 +57,7 @@ func (f *Filter) Bytes() []byte {
 // The seed starts at 1 and is incremented by 1 until hashCount bits have been set.
 // Any hash that is higher than the bit count is thrown away and the seed is incremented by 1 and we try again.
 func (f *Filter) Add(data []byte) *Filter {
-	hasher := hasher.New(f.bitCount, f.hashCount, data)
+	hasher := NewHasher(f.bitCount, f.hashCount, data)
 
 	for hasher.Next() {
 		nextHash := hasher.Value()
@@ -70,7 +69,7 @@ func (f *Filter) Add(data []byte) *Filter {
 
 // Returns true if all k bits of the Bloom filter are set for the specified data.  Otherwise false.
 func (f *Filter) Test(data []byte) bool {
-	hasher := hasher.New(f.bitCount, f.hashCount, data)
+	hasher := NewHasher(f.bitCount, f.hashCount, data)
 
 	for hasher.Next() {
 		nextHash := hasher.Value()
