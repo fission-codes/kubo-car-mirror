@@ -1,21 +1,34 @@
 package bloom
 
 import (
+	"bytes"
 	"encoding/binary"
+	"math"
 	"testing"
 )
 
 func TestBasic(t *testing.T) {
 	f := New(1000, 4)
-	n1 := []byte("Bess")
-	n2 := []byte("Jane")
-	n3 := []byte("Emma")
+
+	if f.bitSet.BitsCount() != 1000 {
+		t.Errorf("should be sized to %v, got %v.", 1000, f.bitSet.BitsCount())
+	}
+
+	expectedBytes := int(math.Ceil(1000 / 8))
+	if len(f.Bytes()) != expectedBytes {
+		// This is off because .Bytes() is not a list of bytes.  It's a list of uint64s.
+		t.Errorf("should be sized to %v, got %v.", expectedBytes, len(f.Bytes()))
+	}
+
+	n1 := []byte("one")
+	n2 := []byte("two")
+	n3 := []byte("three")
 	f.Add(n1)
-	n3a := f.Has(n3)
+	n3a := f.Test(n3)
 	f.Add(n3)
-	n1b := f.Has(n1)
-	n2b := f.Has(n2)
-	n3b := f.Has(n3)
+	n1b := f.Test(n1)
+	n2b := f.Test(n2)
+	n3b := f.Test(n3)
 	if !n1b {
 		t.Errorf("%v should be in.", n1)
 	}
@@ -43,15 +56,15 @@ func TestBasicUint32(t *testing.T) {
 	binary.BigEndian.PutUint32(n4, 103)
 	binary.BigEndian.PutUint32(n5, 104)
 	f.Add(n1)
-	n3a := f.Has(n3)
+	n3a := f.Test(n3)
 	f.Add(n3)
-	n1b := f.Has(n1)
-	n2b := f.Has(n2)
-	n3b := f.Has(n3)
-	n5a := f.Has(n5)
+	n1b := f.Test(n1)
+	n2b := f.Test(n2)
+	n3b := f.Test(n3)
+	n5a := f.Test(n5)
 	f.Add(n5)
-	n5b := f.Has(n5)
-	f.Has(n4)
+	n5b := f.Test(n5)
+	f.Test(n4)
 	if !n1b {
 		t.Errorf("%v should be in.", n1)
 	}
@@ -74,80 +87,37 @@ func TestBasicUint32(t *testing.T) {
 
 func TestNewWithLowNumbers(t *testing.T) {
 	f := New(0, 0)
-	if f.K() != 1 {
-		t.Errorf("%v should be 1", f.K())
+	if f.HashCount() != 1 {
+		t.Errorf("%v should be 1", f.HashCount())
 	}
-	if f.M() != 1 {
-		t.Errorf("%v should be 1", f.M())
+	if f.BitCount() != 1 {
+		t.Errorf("%v should be 1", f.BitCount())
 	}
 }
 
 func TestK(t *testing.T) {
 	f := New(1000, 4)
-	if f.K() != f.k {
+	if f.HashCount() != f.hashCount {
 		t.Error("not accessing K() correctly")
 	}
 }
 
 func TestM(t *testing.T) {
 	f := New(1000, 4)
-	if f.M() != f.m {
+	if f.BitCount() != f.bitCount {
 		t.Error("not accessing M() correctly")
 	}
 }
 
 func TestB(t *testing.T) {
-	f := New(1000, 4)
-	if f.B() != f.b {
-		t.Error("not accessing B() correctly")
-	}
-}
+	b := make([]byte, 8)
+	u := uint64(1)
+	binary.BigEndian.PutUint64(b, u)
 
-// TestEncodeDecodeCbor
-
-// TestEqual
-
-func TestApproximatedSize(t *testing.T) {
-	f := NewWithEstimates(1000, 0.001)
-	f.Add([]byte("Love"))
-	f.Add([]byte("is"))
-	f.Add([]byte("in"))
-	f.Add([]byte("bloom"))
-	size := f.ApproximatedSize()
-	if size != 4 {
-		t.Errorf("%d should equal 4.", size)
-	}
-}
-
-func TestFrom(t *testing.T) {
-	var (
-		k    = uint64(5)
-		data = make([]uint64, 10)
-		test = []byte("test")
-	)
-
-	bf := From(data, k)
-	if bf.K() != k {
-		t.Errorf("Constant k does not match the expected value")
-	}
-
-	if bf.M() != uint64(len(data)*64) {
-		t.Errorf("Capacity does not match the expected value")
-	}
-
-	if bf.Has(test) {
-		t.Errorf("Bloom filter should not contain the value")
-	}
-
-	bf.Add(test)
-	if !bf.Has(test) {
-		t.Errorf("Bloom filter should contain the value")
-	}
-
-	// create a new Bloom filter from an existing (populated) data slice.
-	bf = From(data, k)
-	if !bf.Has(test) {
-		t.Errorf("Bloom filter should contain the value")
+	f := New(8, 1)
+	expected := []byte{byte(0)}
+	if !bytes.Equal(f.Bytes(), expected) {
+		t.Errorf("expected B() to be %v, got %v", expected, f.Bytes())
 	}
 }
 
@@ -164,11 +134,11 @@ func TestFPP(t *testing.T) {
 	for i := uint32(0); i < 1000; i++ {
 		b := make([]byte, 4)
 		binary.BigEndian.PutUint32(b, i+1000)
-		if f.Has(b) {
+		if f.Test(b) {
 			count += 1
 		}
 	}
 	if f.FPP(1000) > 0.001 {
-		t.Errorf("Excessive FPP()! n=%v, m=%v, k=%v, fpp=%v", 1000, f.M(), f.K(), f.FPP(1000))
+		t.Errorf("Excessive FPP()! n=%v, m=%v, k=%v, fpp=%v", 1000, f.BitCount(), f.HashCount(), f.FPP(1000))
 	}
 }

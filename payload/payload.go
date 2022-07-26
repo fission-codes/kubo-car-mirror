@@ -1,7 +1,7 @@
 package payload
 
 import (
-	cbor "github.com/fxamacker/cbor"
+	cbor "github.com/fxamacker/cbor/v2"
 )
 
 type PullRequestor struct {
@@ -26,7 +26,7 @@ type PushProvider struct {
 
 // Encode the payload
 func Encode(pl interface{}) ([]byte, error) {
-	if m, err := cbor.Marshal(pl, cbor.EncOptions{}); err != nil {
+	if m, err := cbor.Marshal(pl); err != nil {
 		return nil, err
 	} else {
 		return m, nil
