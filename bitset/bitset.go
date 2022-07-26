@@ -22,15 +22,15 @@ func New(bitsCount uint64) *BitSet {
 
 // Set sets the bit at the specified index to true.
 func (b *BitSet) Set(bitsIndex uint64) {
-	bytesIndex := bitsIndex / 8
-	bitmask := uint8(1) << uint8(bitsIndex%8)
+	bytesIndex := bitsIndex / byteSize
+	bitmask := uint8(1) << uint8(bitsIndex%byteSize)
 	b.bytes[bytesIndex] |= bitmask
 }
 
 // Test returns true if the bit at the specified index is true.
 func (b *BitSet) Test(bitsIndex uint64) bool {
-	bytesIndex := bitsIndex / 8
-	bitmask := uint8(1) << uint8(bitsIndex%8)
+	bytesIndex := bitsIndex / byteSize
+	bitmask := uint8(1) << uint8(bitsIndex%byteSize)
 	return (b.bytes[bytesIndex] & bitmask) > 0
 }
 
