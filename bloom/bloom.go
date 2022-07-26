@@ -51,7 +51,9 @@ func (f *Filter) Bytes() []byte {
 	return f.bitSet.Bytes()
 }
 
-// Add sets hashCount bits of the Bloom filter, using the XXH3 hash and _i_ through _k_ as the seed.
+// Add sets hashCount bits of the Bloom filter, using the XXH3 hash with a seed.
+// The seed starts at 1 and is incremented by 1 until hashCount bits have been set.
+// Any hash that is higher than the bit count is thrown away and the seed is incremented by 1 and we try again.
 func (f *Filter) Add(data []byte) *Filter {
 	hasher := hasher.New(f.bitCount, f.hashCount, data)
 
@@ -77,7 +79,7 @@ func (f *Filter) Test(data []byte) bool {
 	return true
 }
 
-// FPP returns the false positive probability rate given n
+// FPP returns the false positive probability rate given the number of elements in the filter
 func (f *Filter) FPP(n uint64) float64 {
 	// Taken from https://en.wikipedia.org/wiki/Bloom_filter#Optimal_number_of_hash_functions
 	return math.Pow(1-math.Pow(math.E, -(((float64(f.BitCount())/float64(n))*math.Log(2))*(float64(n)/float64(f.BitCount())))), (float64(f.BitCount())/float64(n))*math.Log(2))

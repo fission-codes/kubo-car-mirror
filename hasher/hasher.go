@@ -2,7 +2,7 @@ package hasher
 
 import "github.com/zeebo/xxh3"
 
-// Hasher generates k hashes as bit indices for the Bloom filter
+// Hasher generates hashCount hashes as bit indices for the Bloom filter
 // Approach taken from Philipp - https://github.com/matheus23/rust-set-reconciliation/blob/main/src/ibf.rs#L128
 type Hasher struct {
 	bitCount  uint64
@@ -13,14 +13,14 @@ type Hasher struct {
 	bitmask   uint64
 }
 
-func New(m, k uint64, data []byte) *Hasher {
+func New(bitCount, hashCount uint64, data []byte) *Hasher {
 	return &Hasher{
-		bitCount:  m,
-		hashCount: k,
+		bitCount:  bitCount,
+		hashCount: hashCount,
 		data:      data,
 		seed:      0,
 		count:     0,
-		bitmask:   nextPowerOfTwo(m) - 1,
+		bitmask:   nextPowerOfTwo(bitCount) - 1,
 	}
 }
 
