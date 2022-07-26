@@ -10,13 +10,13 @@ import (
 func TestBasic(t *testing.T) {
 	f := New(1000, 4)
 
-	if f.bitSet.BitsCount() != 1000 {
-		t.Errorf("should be sized to %v, got %v.", 1000, f.bitSet.BitsCount())
+	// Rounded to nearest power of 2
+	if f.bitSet.BitsCount() != 1024 {
+		t.Errorf("should be sized to %v, got %v.", 1024, f.bitSet.BitsCount())
 	}
 
-	expectedBytes := int(math.Ceil(1000 / 8))
+	expectedBytes := int(math.Ceil(1024 / 8))
 	if len(f.Bytes()) != expectedBytes {
-		// This is off because .Bytes() is not a list of bytes.  It's a list of uint64s.
 		t.Errorf("should be sized to %v, got %v.", expectedBytes, len(f.Bytes()))
 	}
 
@@ -93,23 +93,39 @@ func TestNewWithLowNumbers(t *testing.T) {
 	if f.BitCount() != 1 {
 		t.Errorf("%v should be 1", f.BitCount())
 	}
+
+	f2 := New(2, 0)
+	if f2.HashCount() != 1 {
+		t.Errorf("%v should be 1", f2.HashCount())
+	}
+	if f2.BitCount() != 2 {
+		t.Errorf("%v should be 1", f2.BitCount())
+	}
+
+	f3 := New(3, 0)
+	if f3.HashCount() != 1 {
+		t.Errorf("%v should be 1", f3.HashCount())
+	}
+	if f3.BitCount() != 4 {
+		t.Errorf("%v should be 1", f3.BitCount())
+	}
 }
 
-func TestK(t *testing.T) {
+func TestHashCount(t *testing.T) {
 	f := New(1000, 4)
 	if f.HashCount() != f.hashCount {
-		t.Error("not accessing K() correctly")
+		t.Error("not accessing HashCount() correctly")
 	}
 }
 
-func TestM(t *testing.T) {
+func TestBitCount(t *testing.T) {
 	f := New(1000, 4)
 	if f.BitCount() != f.bitCount {
-		t.Error("not accessing M() correctly")
+		t.Error("not accessing BitCount() correctly")
 	}
 }
 
-func TestB(t *testing.T) {
+func TestBytes(t *testing.T) {
 	b := make([]byte, 8)
 	u := uint64(1)
 	binary.BigEndian.PutUint64(b, u)
@@ -117,7 +133,7 @@ func TestB(t *testing.T) {
 	f := New(8, 1)
 	expected := []byte{byte(0)}
 	if !bytes.Equal(f.Bytes(), expected) {
-		t.Errorf("expected B() to be %v, got %v", expected, f.Bytes())
+		t.Errorf("expected Bytes() to be %v, got %v", expected, f.Bytes())
 	}
 }
 

@@ -19,11 +19,11 @@ func TestEncodeDecode(t *testing.T) {
 
 	// Pull requestor
 	pullRequest := PullRequestor{RS: []string{"a", "b", "c"}, BK: 6, BB: bb}
-	pullRequestEncoded, err := Encode(pullRequest)
+	pullRequestEncoded, err := CborEncode(pullRequest)
 	assert.NilError(t, err)
 
 	var pullRequestDecoded PullRequestor
-	if err := Decode(pullRequestEncoded, &pullRequestDecoded); err != nil {
+	if err := CborDecode(pullRequestEncoded, &pullRequestDecoded); err != nil {
 		t.Error(err)
 	} else {
 		assert.Assert(t, reflect.DeepEqual(pullRequest.RS, pullRequestDecoded.RS), "must be equal")
@@ -35,11 +35,11 @@ func TestEncodeDecode(t *testing.T) {
 
 	// Push Requestor
 	pushRequest := PushRequestor{BK: 6, BB: bb, PL: nil}
-	pushRequestEncoded, err := Encode(pushRequest)
+	pushRequestEncoded, err := CborEncode(pushRequest)
 	assert.NilError(t, err)
 
 	var pushRequestDecoded PushRequestor
-	if err := Decode(pushRequestEncoded, &pushRequestDecoded); err != nil {
+	if err := CborDecode(pushRequestEncoded, &pushRequestDecoded); err != nil {
 		t.Error(err)
 	} else {
 		assert.Assert(t, reflect.DeepEqual(pushRequest.BK, pushRequestDecoded.BK), "must be equal")
@@ -49,11 +49,11 @@ func TestEncodeDecode(t *testing.T) {
 
 	// Push Provider
 	pushProvide := PushProvider{SR: []string{"a", "b", "c"}, BK: 6, BB: bb}
-	pushProvideEncoded, err := Encode(pushProvide)
+	pushProvideEncoded, err := CborEncode(pushProvide)
 	assert.NilError(t, err)
 
 	var pushProvideDecoded PushProvider
-	if err := Decode(pushProvideEncoded, &pushProvideDecoded); err != nil {
+	if err := CborDecode(pushProvideEncoded, &pushProvideDecoded); err != nil {
 		t.Error(err)
 	} else {
 		assert.Assert(t, reflect.DeepEqual(pushProvide.SR, pushProvideDecoded.SR), "must be equal")

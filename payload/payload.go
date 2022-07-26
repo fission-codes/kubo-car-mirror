@@ -24,8 +24,8 @@ type PushProvider struct {
 	BB []byte   `cbor:"bb,omitempty"` // Bloom filter binary
 }
 
-// Encode the payload
-func Encode(pl interface{}) ([]byte, error) {
+// CborEncode encodes the payload in CBOR.
+func CborEncode(pl interface{}) ([]byte, error) {
 	if m, err := cbor.Marshal(pl); err != nil {
 		return nil, err
 	} else {
@@ -33,8 +33,8 @@ func Encode(pl interface{}) ([]byte, error) {
 	}
 }
 
-// Decode the payload
-func Decode(b []byte, v interface{}) error {
+// CborDecode decodes the payload from CBOR.
+func CborDecode(b []byte, v interface{}) error {
 	if err := cbor.Unmarshal(b, v); err != nil {
 		return err
 	}
