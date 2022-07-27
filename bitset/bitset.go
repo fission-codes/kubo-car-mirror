@@ -13,10 +13,15 @@ type BitSet struct {
 
 const byteSize uint64 = 8
 
-// New creates a new BitSet with the specified number of bits.
+// New returns a pointer to a new BitSet with the specified number of bits.
 func New(bitsCount uint64) *BitSet {
 	bytesCount := int(math.Ceil(float64(bitsCount) / float64(byteSize)))
 	bytes := make([]byte, bytesCount)
+	return &BitSet{bytes, bitsCount}
+}
+
+// NewFromBytes returns a pointer to a new BitSet with the specified bitsCount and bytes.
+func NewFromBytes(bitsCount uint64, bytes []byte) *BitSet {
 	return &BitSet{bytes, bitsCount}
 }
 

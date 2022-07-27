@@ -13,13 +13,21 @@ type Filter struct {
 	bitSet    *bitset.BitSet // bloom binary
 }
 
-// NewFilter creates a new Bloom filter with the specified number of bits and hash functions.
+// NewFilter returns a new Bloom filter with the specified number of bits and hash functions.
 // bitCount will be rounded up to the nearest positive power of 2.
 // hashCount will be set to 1 if a negative number is specified, to prevent panic.
 func NewFilter(bitCount, hashCount uint64) *Filter {
 	safeBitCount := util.NextPowerOfTwo(max(1, bitCount))
 	safeHashCount := max(1, hashCount)
 	return &Filter{safeBitCount, safeHashCount, bitset.New(safeBitCount)}
+}
+
+// NewFilter returns a new Bloom filter with the specified number of bits and hash functions,
+// and uses bloomBytes as the initial bytes of the Bloom binary.
+func NewFilterFromBloomBytes(bitCount, hashCount uint64, bloomBytes []byte) *Filter {
+	safeBitCount := util.NextPowerOfTwo(max(1, bitCount))
+	safeHashCount := max(1, hashCount)
+	return &Filter{safeBitCount, safeHashCount, bitset.NewFromBytes(safeBitCount, bloomBytes)}
 }
 
 // EstimateParameters returns estimates for bitCount and hashCount.

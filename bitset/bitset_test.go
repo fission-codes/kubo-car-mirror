@@ -1,6 +1,7 @@
 package bitset
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -27,6 +28,17 @@ func TestSize(t *testing.T) {
 	}
 	if b3.BytesCount() != 2 {
 		t.Errorf("should have %v bytes, got %v", 2, b3.BytesCount())
+	}
+}
+
+func TestNewFromBytes(t *testing.T) {
+	b1 := New(1000)
+	b1.Set(1)
+	b1.Set(100)
+	b1.Set(354)
+	b2 := NewFromBytes(1000, b1.Bytes())
+	if !bytes.Equal(b1.Bytes(), b2.Bytes()) {
+		t.Errorf("bytes should be identical")
 	}
 }
 
