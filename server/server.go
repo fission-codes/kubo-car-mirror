@@ -2,32 +2,75 @@ package server
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/fission-suite/car-mirror/payload"
+	"github.com/julienschmidt/httprouter"
 )
 
-func Root(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "/")
+func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	fmt.Fprint(w, "")
 }
 
-func DagPush(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "/dag/push")
-}
-
-func DagPull(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "/dag/pull")
-}
-
-func Serve() error {
-	server := http.Server{
-		Addr: "127.0.0.1:8080",
+func DagPush(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
+	if err != nil {
+		stream = false
 	}
 
-	http.HandleFunc("/api/v0/dag/push", DagPush)
-	http.HandleFunc("/api/v0/dag/pull", DagPull)
-	http.HandleFunc("/api/v0/", Root)
-	http.HandleFunc("/", Root)
+	diff := r.URL.Query().Get("diff")
+
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
+		http.Error(w, errStr, 500)
+		return
+	}
+
+	var pushRequest payload.PushRequestor
+	if err := payload.CborDecode(body, &pushRequest); err != nil {
+		errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
+		http.Error(w, errStr, 500)
+		return
+	}
+
+	fmt.Fprintf(w, "/dag/push, stream=%v, diff=%v, request=%v\n", stream, diff, pushRequest)
+}
+
+func DagPull(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
+	if err != nil {
+		stream = false
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
+		http.Error(w, errStr, 500)
+		return
+	}
+
+	var pullRequest payload.PullRequestor
+	if err := payload.CborDecode(body, &pullRequest); err != nil {
+		errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
+		http.Error(w, errStr, 500)
+		return
+	}
+
+	fmt.Fprintf(w, "/dag/pull, stream=%v, request=%v\n", stream, pullRequest)
+}
+
+func ServeHTTP() error {
+	router := httprouter.New()
+	router.GET("/", Index)
+	router.POST("/dag/push", DagPush)
+	router.POST("/dag/pull", DagPull)
 
 	log.Print("Serving API on http://localhost:8080")
-	return server.ListenAndServe()
+	return http.ListenAndServe(":8080", router)
 }

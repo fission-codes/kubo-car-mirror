@@ -65,6 +65,5 @@ func (b *BitSet) OnesCount() uint64 {
 
 // HexEncode returns the bytes of the BitSet encoded as a hexadecimal string.
 func (b *BitSet) HexEncode() string {
-	// should this be encoded in reverse?
 	return hex.EncodeToString(b.bytes)
 }

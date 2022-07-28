@@ -8,6 +8,7 @@ require (
 	github.com/ipfs/go-cid v0.2.0
 	github.com/ipfs/go-merkledag v0.6.0
 	github.com/ipld/go-car/v2 v2.4.1
+	github.com/julienschmidt/httprouter v1.3.0
 	github.com/zeebo/xxh3 v1.0.2
 	gotest.tools v2.2.0+incompatible
 )

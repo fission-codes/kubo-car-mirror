@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	log.Fatal(server.Serve())
+	log.Fatal(server.ServeHTTP())
 }
