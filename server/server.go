@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/fission-suite/car-mirror/payload"
+	"github.com/fission-codes/go-car-mirror/payload"
 	"github.com/julienschmidt/httprouter"
 )
 

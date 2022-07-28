@@ -1,7 +1,7 @@
 package bloom
 
 import (
-	"github.com/fission-suite/car-mirror/util"
+	"github.com/fission-codes/go-car-mirror/util"
 	"github.com/zeebo/xxh3"
 )
 
