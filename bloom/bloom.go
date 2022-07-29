@@ -14,28 +14,28 @@ type Filter struct {
 }
 
 // NewFilter returns a new Bloom filter with the specified number of bits and hash functions.
-// bitCount will be rounded up to the nearest positive power of 2.
-// hashCount will be set to 1 if a negative number is specified, to prevent panic.
+// bitCount and hashCount will be set to 1 if a number less than 1 is provided, to avoid panic.
 func NewFilter(bitCount, hashCount uint64) *Filter {
-	safeBitCount := util.NextPowerOfTwo(max(1, bitCount))
+	safeBitCount := max(1, bitCount)
 	safeHashCount := max(1, hashCount)
 	return &Filter{safeBitCount, safeHashCount, bitset.New(safeBitCount)}
 }
 
-// NewFilter returns a new Bloom filter with the specified number of bits and hash functions,
+// NewFilterFromBloomBytes returns a new Bloom filter with the specified number of bits and hash functions,
 // and uses bloomBytes as the initial bytes of the Bloom binary.
+// bitCount and hashCount will be set to 1 if a number less than 1 is provided, to avoid panic.
 func NewFilterFromBloomBytes(bitCount, hashCount uint64, bloomBytes []byte) *Filter {
-	safeBitCount := util.NextPowerOfTwo(max(1, bitCount))
+	safeBitCount := max(1, bitCount)
 	safeHashCount := max(1, hashCount)
 	return &Filter{safeBitCount, safeHashCount, bitset.NewFromBytes(safeBitCount, bloomBytes)}
 }
 
 // EstimateParameters returns estimates for bitCount and hashCount.
 // Calculations are taken from the CAR Mirror spec.
+// bitCount will be rounded to the next power of two, as recommended by the spec, to avoid resampling.
 func EstimateParameters(n uint64, fpp float64) (bitCount, hashCount uint64) {
-	bitCount = uint64(math.Ceil(-1 * float64(n) * math.Log(fpp) / math.Pow(math.Log(2), 2)))
+	bitCount = util.NextPowerOfTwo(uint64(math.Ceil(-1 * float64(n) * math.Log(fpp) / math.Pow(math.Log(2), 2))))
 	hashCount = uint64(math.Ceil(float64(bitCount) / float64(n) * math.Log(2)))
-
 	return
 }
 

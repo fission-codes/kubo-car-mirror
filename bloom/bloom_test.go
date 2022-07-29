@@ -2,6 +2,7 @@ package bloom
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"math"
 	"testing"
@@ -11,11 +12,11 @@ func TestBasic(t *testing.T) {
 	f := NewFilter(1000, 4)
 
 	// Rounded to nearest power of 2
-	if f.bitSet.BitsCount() != 1024 {
-		t.Errorf("should be sized to %v, got %v.", 1024, f.bitSet.BitsCount())
+	if f.bitSet.BitsCount() != 1000 {
+		t.Errorf("should be sized to %v, got %v.", 1000, f.bitSet.BitsCount())
 	}
 
-	expectedBytes := int(math.Ceil(1024 / 8))
+	expectedBytes := int(math.Ceil(1000 / 8))
 	if len(f.Bytes()) != expectedBytes {
 		t.Errorf("should be sized to %v, got %v.", expectedBytes, len(f.Bytes()))
 	}
@@ -106,7 +107,7 @@ func TestNewWithLowNumbers(t *testing.T) {
 	if f3.HashCount() != 1 {
 		t.Errorf("%v should be 1", f3.HashCount())
 	}
-	if f3.BitCount() != 4 {
+	if f3.BitCount() != 3 {
 		t.Errorf("%v should be 1", f3.BitCount())
 	}
 }
@@ -156,5 +157,18 @@ func TestFPP(t *testing.T) {
 	}
 	if f.FPP(1000) > 0.001 {
 		t.Errorf("Excessive FPP()! n=%v, m=%v, k=%v, fpp=%v", 1000, f.BitCount(), f.HashCount(), f.FPP(1000))
+	}
+}
+
+func TestLargeNotPowerOfTwo(t *testing.T) {
+	// Not a power of 2
+	f := NewFilter(9, 10)
+	for i := 0; i < 8; i++ {
+		item := make([]byte, 4)
+		rand.Read(item)
+		f.Add(item)
+		if f.Test(item) != true {
+			t.Errorf("should always return true for something added, i=%v, item=%v", i, item)
+		}
 	}
 }
