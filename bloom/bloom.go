@@ -69,6 +69,7 @@ func (f *Filter) Add(data []byte) *Filter {
 
 	for hasher.Next() {
 		nextHash := hasher.Value()
+		// fmt.Printf("%v\n", nextHash)
 		f.bitSet.Set(uint64(nextHash))
 	}
 
