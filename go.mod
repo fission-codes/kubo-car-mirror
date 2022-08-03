@@ -1,9 +1,9 @@
-module carmirror
+module github.com/fission-codes/go-car-mirror
 
 go 1.17
 
 require (
-	github.com/fission-codes/go-car-mirror v0.0.0-20220802164705-7cb720f8f463
+	// github.com/fission-codes/go-car-mirror v0.0.0-20220802164705-7cb720f8f463
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.2.0
