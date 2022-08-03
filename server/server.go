@@ -65,6 +65,15 @@ func DagPull(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	fmt.Fprintf(w, "/dag/pull, stream=%v, request=%v\n", stream, pullRequest)
 }
 
+// func Router()  {
+// 	return router := httprouter.New()
+// 	router.GET("/", Index)
+// 	router.POST("/dag/push", DagPush)
+// 	router.POST("/dag/pull", DagPull)
+
+// 	// return router.ServerHTTP
+// }
+
 func ServeHTTP() error {
 	router := httprouter.New()
 	router.GET("/", Index)
