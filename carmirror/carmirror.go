@@ -29,7 +29,7 @@ var (
 	ErrSomething = fmt.Errorf("something")
 )
 
-//
+// or pushable, pullable?
 type CarMirrorable interface {
 	// NewPushSession()
 	// NewPullSession()

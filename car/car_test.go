@@ -1,8 +1,9 @@
 package car
 
 import (
-	"carmirror/dag"
 	"testing"
+
+	"github.com/fission-codes/go-car-mirror/dag"
 )
 
 func TestCreateCar(t *testing.T) {
