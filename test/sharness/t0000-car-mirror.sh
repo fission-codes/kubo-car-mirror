@@ -100,8 +100,18 @@ run_advanced_test() {
     ipfsi 1 repo gc > /dev/null
   '
 
+  test_expect_success "import test CAR file on node 0" '
+    ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
+  '
+
   run_single_file_test
-  run_random_dir_test
+  # run_random_dir_test
+
+  # Just confirming car mirror is serving over the right port
+  test_expect_success "curl" '
+    curl -v --data-binary @../t0000-car-mirror-data/pull.cbor "http://localhost:2504/dag/pull" --output blah.car 2> curl_out &&
+    test_should_not_contain "Internal Server Error" curl_out
+  '
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
@@ -110,6 +120,18 @@ run_advanced_test() {
 
 test_expect_success "set up testbed" '
   iptb testbed create -type localipfs -count 2 -force -init
+'
+
+test_expect_success "configure the plugin" '
+  ipfsi 0 config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr \""127.0.0.1:2504"\" &&
+  ipfsi 1 config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr \""127.0.0.1:2505"\"
+'
+
+test_expect_success "confirm correct ports configured" '
+  ipfsi 0 config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node0_config &&
+  ipfsi 1 config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node1_config &&
+  test_should_contain "127.0.0.1:2504" node0_config &&
+  test_should_contain "127.0.0.1:2505" node1_config
 '
 
 run_advanced_test

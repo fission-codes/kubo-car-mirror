@@ -3,12 +3,19 @@ package carmirror
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
+	"github.com/fission-codes/go-car-mirror/dag"
+	"github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
+	mdag "github.com/ipfs/go-merkledag"
+	"github.com/ipfs/go-merkledag/traverse"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/ipfs/interface-go-ipfs-core/path"
+	carv1 "github.com/ipld/go-car"
 )
 
 var log = golog.Logger("car-mirror")
@@ -41,6 +48,9 @@ type CarMirrorable interface {
 type CarMirror struct {
 	// Local node getter
 	lng ipld.NodeGetter
+
+	// CoreAPI
+	capi coreiface.CoreAPI
 
 	// Local block API
 	bapi coreiface.BlockAPI
@@ -81,7 +91,7 @@ func (cfg *Config) Validate() error {
 // Its crucial that the NodeGetter passed to New be an offline-only getter.
 // If using IPFS, this package defines a helper function: NewLocalNodeGetter
 // to get an offline-only node getter from an IPFS CoreAPI interface.
-func New(localNodes ipld.NodeGetter, blockStore coreiface.BlockAPI, opts ...func(cfg *Config)) (*CarMirror, error) {
+func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreiface.BlockAPI, opts ...func(cfg *Config)) (*CarMirror, error) {
 	// Add default stuff to the config
 	cfg := &Config{}
 
@@ -95,6 +105,7 @@ func New(localNodes ipld.NodeGetter, blockStore coreiface.BlockAPI, opts ...func
 
 	cm := &CarMirror{
 		lng:  localNodes,
+		capi: capi,
 		bapi: blockStore,
 		// Spec: The Provider MAY garbage collect its session state when it has exhausted its graph, since false positives in the Bloom filter MAY lead to the Provider having an incorrect picture of the Requestor's store. In addition, further requests MAY come in for that session. Session state is an optimization, so treating this as a totally new session is acceptable. However, due to this fact, it is RECOMMENDED that the Provider maintain a session state TTL of at least 30 seconds since the last block is sent. Maintaining this cache for long periods can speed up future requests, so the Provider MAY keep this information around to aid future requests.
 		sessionTTLDur: time.Second * 30,
@@ -138,3 +149,50 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 }
 
 // TODO: Add other methods below
+
+func (cm *CarMirror) NewPushSession() {}
+func (cm *CarMirror) NewPullSession() {
+
+}
+
+// GetLocalCids returns a unique list of `cid.CID`s underneath a given root CID, using an offline CoreAPI.
+// The root CID is included in the returned list.
+// In the case of an error, both the discovered CIDs thus far and the error are returned.
+func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid.Cid, error) {
+	var cids []cid.Cid
+	rootCid, err := dag.ParseCid(rootCidStr)
+	if err != nil {
+		return nil, err
+	}
+	cids = append(cids, *rootCid)
+
+	rp, err := cm.capi.ResolvePath(ctx, path.New(rootCidStr))
+	if err != nil {
+		return cids, err
+	}
+
+	nodeGetter := mdag.NewSession(ctx, cm.lng)
+	obj, err := nodeGetter.Get(ctx, rp.Cid())
+	if err != nil {
+		return cids, err
+	}
+	err = traverse.Traverse(obj, traverse.Options{
+		DAG:   nodeGetter,
+		Order: traverse.DFSPre,
+		Func: func(current traverse.State) error {
+			cids = append(cids, current.Node.Cid())
+			return nil
+		},
+		ErrFunc:        nil,
+		SkipDuplicates: true,
+	})
+	if err != nil {
+		return cids, fmt.Errorf("error traversing DAG: %w", err)
+	}
+
+	return cids, nil
+}
+
+func (cm *CarMirror) WriteCar(ctx context.Context, cids []cid.Cid, w io.Writer) error {
+	return carv1.WriteCar(ctx, cm.lng, cids, w)
+}

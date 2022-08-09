@@ -1,5 +1,7 @@
 TEST_NAME = t0000-car-mirror
 
+.PHONY: test
+
 default: test
 
 clean:
