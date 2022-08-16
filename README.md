@@ -25,22 +25,21 @@ export GO111MODULE=on
 git clone https://github.com/ipfs/kubo
 cd kubo
 
+# Add the plugin to the preload list.
+echo "carmirror github.com/fission-codes/go-car-mirror/plugin *" >> plugin/loader/preload_list
+
+# Prep preload stuff
+make plugin/loader/preload.go
+
 # Pull in the plugin (you can specify a version other than latest if you'd like, such as a GitHub branch).
 go get github.com/fission-codes/go-car-mirror/plugin@latest
 
 # Or if building against local copy...
-cat <<EOF>>go.mod
-
-require github.com/fission-codes/go-car-mirror latest
-
-replace github.com/fission-codes/go-car-mirror => ../go-car-mirror
-EOF
+go mod edit -replace=github.com/fission-codes/go-car-mirror@v0.0.0-unpublished=../go-car-mirror
+go get -d github.com/fission-codes/go-car-mirror@v0.0.0-unpublished
 
 # Tidy up and download deps
 go mod tidy
-
-# Add the plugin to the preload list.
-echo "carmirror github.com/fission-codes/go-car-mirror/plugin *" >> plugin/loader/preload_list
 
 # Build kubo with the plugin.
 make build

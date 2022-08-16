@@ -4,13 +4,33 @@ test_description="Test CAR Mirror"
 
 . lib/test-lib.sh
 
+# Don't connect nodes together.
+# Shouldn't matter since we run commands with --offline, but just to be safe...
+startup_cluster_disconnected() {
+  num_nodes="$1"
+  shift
+  other_args="$@"
+  bound=$(expr "$num_nodes" - 1)
+
+  if test -n "$other_args"; then
+    test_expect_success "start up nodes with additional args" "
+      iptb start -wait [0-$bound] -- ${other_args[@]}
+    "
+  else
+    test_expect_success "start up nodes" '
+      iptb start -wait [0-$bound]
+    '
+  fi
+}
+
+
 check_file_fetch() {
   node=$1
   fhash=$2
   fname=$3
 
   test_expect_success "can fetch file" '
-    ipfsi $node cat $fhash > fetch_out
+    ipfsi $node cat $fhash --offline > fetch_out
   '
 
   test_expect_success "file looks good" '
@@ -18,22 +38,45 @@ check_file_fetch() {
   '
 }
 
+check_no_file_fetch() {
+  node=$1
+  fhash=$2
+
+  test_expect_success "node cannot fetch file" '
+    ipfsi $node cat $fhash --offline 2> fetch_error
+    test_should_contain "could not find $fhash" fetch_error
+  '
+
+}
+
 check_dir_fetch() {
   node=$1
   ref=$2
 
   test_expect_success "node can fetch all refs for dir" '
-    ipfsi $node refs -r $ref > /dev/null
+    ipfsi $node refs -r $ref --offline > /dev/null
   '
+}
+
+check_no_dir_fetch() {
+  node=$1
+  ref=$2
+
+  test_expect_success "node cannot fetch all refs for dir" '
+    ipfsi $node refs -r $ref --offline > /dev/null 2> fetch_error
+    test_should_contain "could not find $ref" fetch_error
+  '
+
 }
 
 run_single_file_test() {
   test_expect_success "add a file on node1" '
     random 1000000 > filea &&
-    FILEA_HASH=$(ipfsi 1 add -q filea)
+    FILEA_HASH=$(ipfsi 0 add -q filea)
   '
 
   check_file_fetch 0 $FILEA_HASH filea
+  check_no_file_fetch 1 $FILEA_HASH
 }
 
 run_random_dir_test() {
@@ -45,11 +88,12 @@ run_random_dir_test() {
     DIR_HASH=$(ipfsi 0 add -r -Q foobar)
   '
 
-  check_dir_fetch 1 $DIR_HASH
+  check_dir_fetch 0 $DIR_HASH
+  check_no_dir_fetch 1 $DIR_HASH
 }
 
 run_advanced_test() {
-  startup_cluster 2 "$@"
+  startup_cluster_disconnected 2 "$@"
 
   test_expect_success "clean repo before test" '
     ipfsi 0 repo gc > /dev/null &&
@@ -57,74 +101,15 @@ run_advanced_test() {
   '
 
   run_single_file_test
-
   run_random_dir_test
-
-  test_expect_success "node0 data transferred looks correct" '
-    ipfsi 0 bitswap stat > stat0 &&
-    grep "blocks sent: 126" stat0 > /dev/null &&
-    grep "blocks received: 5" stat0 > /dev/null &&
-    grep "data sent: 228113" stat0 > /dev/null &&
-    grep "data received: 1000256" stat0 > /dev/null
-  '
-
-  test_expect_success "node1 data transferred looks correct" '
-    ipfsi 1 bitswap stat > stat1 &&
-    grep "blocks received: 126" stat1 > /dev/null &&
-    grep "blocks sent: 5" stat1 > /dev/null &&
-    grep "data received: 228113" stat1 > /dev/null &&
-    grep "data sent: 1000256" stat1 > /dev/null
-  '
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
   '
 }
 
-test_expect_success "set up tcp testbed" '
+test_expect_success "set up testbed" '
   iptb testbed create -type localipfs -count 2 -force -init
-'
-
-addrs='"[\"/ip4/127.0.0.1/tcp/0\", \"/ip4/127.0.0.1/udp/0/quic\"]"'
-test_expect_success "configure addresses" '
-  ipfsi 0 config --json Addresses.Swarm '"${addrs}"' &&
-  ipfsi 1 config --json Addresses.Swarm '"${addrs}"'
-'
-
-# Test TCP transport
-echo "Testing TCP"
-test_expect_success "use TCP only" '
-  iptb run -- ipfs config --json Swarm.Transports.Network.QUIC false &&
-  iptb run -- ipfs config --json Swarm.Transports.Network.Relay false &&
-  iptb run -- ipfs config --json Swarm.Transports.Network.Websocket false
-'
-run_advanced_test
-
-# test multiplex muxer
-echo "Running advanced tests with mplex"
-test_expect_success "disable yamux" '
-  iptb run -- ipfs config --json Swarm.Transports.Multiplexers.Yamux false
-'
-run_advanced_test
-
-test_expect_success "re-enable yamux" '
-  iptb run -- ipfs config --json Swarm.Transports.Multiplexers.Yamux null
-'
-
-# test Noise
-
-echo "Running advanced tests with NOISE"
-test_expect_success "use noise only" '
-  iptb run -- ipfs config --json Swarm.Transports.Security.TLS false
-'
-
-run_advanced_test
-
-# test QUIC
-echo "Running advanced tests over QUIC"
-test_expect_success "use QUIC only" '
-  iptb run -- ipfs config --json Swarm.Transports.Network.QUIC true &&
-  iptb run -- ipfs config --json Swarm.Transports.Network.TCP false
 '
 
 run_advanced_test
