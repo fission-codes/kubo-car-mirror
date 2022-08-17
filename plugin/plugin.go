@@ -23,7 +23,6 @@ var Plugins = []plugin.Plugin{
 
 // CarMirrorPlugin is exported struct IPFS will load & work with
 type CarMirrorPlugin struct {
-	// configPath string
 	host *carmirror.CarMirror
 	// log level, defaults to "info"
 	LogLevel string
@@ -39,13 +38,7 @@ type CarMirrorPlugin struct {
 // at least one address will need to be explicitly added to the AllowAddrs
 // list before anyone can push to this node
 func NewCarMirrorPlugin() *CarMirrorPlugin {
-	// cfgPath, err := configPath()
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 	return &CarMirrorPlugin{
-		// configPath:       cfgPath,
 		LogLevel: "info",
 		// 5001 is ipfs API
 		// 5002 for car mirror?
@@ -67,8 +60,9 @@ func (*CarMirrorPlugin) Version() string {
 }
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
-	// TODO: Load config from file
-	log.Debugf("%s: Init\n", p.Name())
+	p.loadConfig(env.Config)
+	// golog.SetLogLevel("car-mirror-plugin", p.LogLevel)
+	log.Debugf("%s: Init(%v), env.Config = %v\n", p.Name(), env, env.Config)
 	return nil
 }
 
@@ -81,7 +75,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 		return err
 	}
 
-	p.host, err = carmirror.New(lng, capi.Block(), func(cfg *carmirror.Config) {
+	p.host, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddress = p.HTTPRemoteAddr
 	})
 	if err != nil {
@@ -110,65 +104,115 @@ func (p *CarMirrorPlugin) listenLocalCommands() error {
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 
-func newPushHandler(cm *carmirror.CarMirror) http.HandlerFunc {
-
+func newPushHandler(p *carmirror.CarMirror) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
-		if err != nil {
-			stream = false
-		}
-
-		diff := r.URL.Query().Get("diff")
-
-		body, err := ioutil.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
-			http.Error(w, errStr, 500)
-			return
-		}
-
-		var pushRequest payload.PushRequestor
-		if err := payload.CborDecode(body, &pushRequest); err != nil {
-			errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
-			http.Error(w, errStr, 500)
-			return
-		}
-
 		switch r.Method {
 		case "POST":
-			fmt.Fprintf(w, "/dag/push, stream=%v, diff=%v, request=%v\n", stream, diff, pushRequest)
+			stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
+			if err != nil {
+				stream = false
+			}
+
+			diff := r.URL.Query().Get("diff")
+
+			body, err := ioutil.ReadAll(r.Body)
+			defer r.Body.Close()
+			if err != nil {
+				errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
+				http.Error(w, errStr, 500)
+				return
+			}
+
+			var pushRequest payload.PushRequestor
+			if err := payload.CborDecode(body, &pushRequest); err != nil {
+				errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
+				http.Error(w, errStr, 500)
+				return
+			}
+			log.Debugf("/dag/push, stream=%v, diff=%v, request=%v\n", stream, diff, pushRequest)
+			// TODO: do something like carmirror.NewPush
 			log.Debug("push")
 		}
 	})
 }
 
-func newPullHandler(cm *carmirror.CarMirror) http.HandlerFunc {
+func newPullHandler(p *carmirror.CarMirror) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
-		if err != nil {
-			stream = false
-		}
-
-		body, err := ioutil.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
-			http.Error(w, errStr, 500)
-			return
-		}
-
-		var pullRequest payload.PullRequestor
-		if err := payload.CborDecode(body, &pullRequest); err != nil {
-			errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
-			http.Error(w, errStr, 500)
-			return
-		}
-
+		// TODO(JJ)
+		// - parse args
+		// - pass args to carmirror.NewPull
+		// - pull.Do or similar
+		// - parse results and return
 		switch r.Method {
 		case "POST":
 			log.Debug("pull")
-			fmt.Fprintf(w, "/dag/pull, stream=%v, request=%v\n", stream, pullRequest)
+			stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
+			if err != nil {
+				stream = false
+			}
+
+			body, err := ioutil.ReadAll(r.Body)
+			defer r.Body.Close()
+			if err != nil {
+				errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
+				http.Error(w, errStr, 500)
+				return
+			}
+
+			var pullRequest payload.PullRequestor
+			if err := payload.CborDecode(body, &pullRequest); err != nil {
+				errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
+				http.Error(w, errStr, 500)
+				return
+			}
+			log.Debug("pull")
+			// could make generic with .Do that takes context, like dsync
+			cids, err := p.GetLocalCids(r.Context(), pullRequest.RS[0])
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			log.Debugf("/dag/pull, stream=%v, request=%v, cids=%v\n", stream, pullRequest, cids)
+
+			if err = p.WriteCar(r.Context(), cids, w); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+
+			return
+			// TODO: do something like carmirror.NewPull
 		}
 	})
+}
+
+func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {
+	log.Debugf("loadConfig: cfg = %v\n", cfg)
+	if v := getString(cfg, "HTTPRemoteAddr"); v != "" {
+		p.HTTPRemoteAddr = v
+	}
+	if v := getString(cfg, "HTTPCommandsAddr"); v != "" {
+		p.HTTPCommandsAddr = v
+	}
+	if v := getString(cfg, "LogLevel"); v != "" {
+		p.LogLevel = v
+	}
+}
+
+func getString(config interface{}, name string) string {
+	if config == nil {
+		return ""
+	}
+	mapIface, ok := config.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	rawValue, ok := mapIface[name]
+	if !ok || rawValue == "" {
+		return ""
+	}
+	value, ok := rawValue.(string)
+	if !ok {
+		return ""
+	}
+	return value
 }
