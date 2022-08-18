@@ -4,52 +4,49 @@ test_description="Test CAR Mirror"
 
 . lib/test-lib.sh
 
-default_ipfs_remote_port=4001
-default_cm_port=2504
+default_commands_port=2502
 
-cm_port() {
+cm_commands_port() {
   node=$1
-  echo $((default_cm_port + $node))
+  echo $(( default_commands_port + ($node * 2) ))
 }
 
-cm_command_addr() {
+cm_commands_addr() {
   node=$1
-  echo "127.0.0.1:$(cm_port $node)"
+  echo "127.0.0.1:$(cm_commands_port $node)"
 }
 
-ipfs_remote_port() {
+cm_remote_port() {
   node=$1
-  echo $((default_ipfs_remote_port + $node))
+  commands_port=$(cm_commands_port $node)
+  echo $(($commands_port + 1))
 }
 
-ipfs_remote_addr() {
+cm_remote_addr() {
   node=$1
-  echo "127.0.0.1:$(ipfs_remote_port $node)"
+  echo ":$(cm_remote_port $node)"
 }
 
 configure_cm_ports() {
   num_nodes=$1
   for ((node=0; node<$num_nodes; node++)); do
     test_expect_success "configure car mirror port for node $node" "
-      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr '\""$(cm_command_addr $node)"\"' &&
-      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '\""$(ipfs_remote_addr $node)"\"' &&
+      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr '\""$(cm_commands_addr $node)"\"' &&
+      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '\""$(cm_remote_addr $node)"\"' &&
       ipfsi $node config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node_config &&
-      test_should_contain \""$(cm_command_addr $node)"\" node_config &&
+      test_should_contain \""$(cm_commands_addr $node)"\" node_config &&
       ipfsi $node config Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr > node_config &&
-      test_should_contain \""$(ipfs_remote_addr $node)"\" node_config
+      test_should_contain \""$(cm_remote_addr $node)"\" node_config
     "
   done
 }
 
-# car mirror equivalent of ipfsi, allowing us to call the car mirror cli for a given node
-
-cmi() {
+# carmirror equivalent of ipfsi, allowing us to call the carmirror cli for a given node
+carmirrori() {
   node="$1"
-  dir=$node
   shift
-  IPFS_PATH="$IPTB_ROOT/testbeds/default/$dir" ipfs "$@"
 
-  cm --command-address $(cm_command_addr $node) $@
+  carmirror --commands-address "$(cm_commands_addr $node)" "$@"
 }
 
 # Don't connect nodes together.
@@ -126,7 +123,7 @@ run_pull_test() {
     ipfsi 1 repo gc > /dev/null
   '
 
-  configure_cm_port 2
+  # configure_cm_ports 2
 
   test_expect_success "import test CAR file on node 0" '
     ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
@@ -139,13 +136,13 @@ run_pull_test() {
 
   # Just confirming car mirror is serving over the right port
   test_expect_success "curl" '
-    curl -v --data-binary @../t0000-car-mirror-data/pull.cbor "http://localhost:2504/dag/pull" --output blah.car 2> curl_out &&
+    curl -v --data-binary @../t0000-car-mirror-data/pull.cbor "http://localhost:2502/dag/pull/new" --output blah.car 2> curl_out &&
     test_should_not_contain "Internal Server Error" curl_out
   '
 
-  # test_expect_success "car mirror pull works" '
-  #   cmi 1 pull --from $(cm_command_addr 0)
-  # '
+  test_expect_success "car mirror push works" '
+    carmirrori 0 push --commands-address $(cm_commands_addr 1) QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_remote_addr )
+  '
 
   # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 

@@ -62,7 +62,7 @@ var pull = &cobra.Command{
 }
 
 func init() {
-	root.PersistentFlags().StringVar(&defaultCmdAddr, "command-address", defaultCmdAddr, "address to issue requests that control local carmirror")
+	root.PersistentFlags().StringVar(&defaultCmdAddr, "commands-address", defaultCmdAddr, "address to issue requests that control local carmirror")
 	root.AddCommand(push, pull)
 }
 

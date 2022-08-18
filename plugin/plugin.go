@@ -23,6 +23,7 @@ var Plugins = []plugin.Plugin{
 
 // CarMirrorPlugin is exported struct IPFS will load & work with
 type CarMirrorPlugin struct {
+	// TODO: might need a config file if we have to write to it, like from allow and deny requests
 	host *carmirror.CarMirror
 	// log level, defaults to "info"
 	LogLevel string
@@ -30,17 +31,13 @@ type CarMirrorPlugin struct {
 	HTTPCommandsAddr string
 	// Address CAR Mirror will listen on for performing CAR Mirror
 	HTTPRemoteAddr string
-	// allow-list of peerIDs to accept DAG pushes
-	AllowAddrs []string
 }
 
-// NewDsyncPlugin creates a CarMirrorPlugin with some sensible defaults
-// at least one address will need to be explicitly added to the AllowAddrs
-// list before anyone can push to this node
+// NewCarMirrorPlugin creates a CarMirrorPlugin with some sensible defaults
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
 		LogLevel:         "info",
-		HTTPRemoteAddr:   "127.0.0.1:2503",
+		HTTPRemoteAddr:   ":2503",
 		HTTPCommandsAddr: "127.0.0.1:2502",
 	}
 }
@@ -73,7 +70,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 	}
 
 	p.host, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
-		cfg.HTTPRemoteAddress = p.HTTPRemoteAddr
+		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
 	})
 	if err != nil {
 		return err
@@ -96,8 +93,8 @@ func (p *CarMirrorPlugin) Close() error {
 
 func (p *CarMirrorPlugin) listenLocalCommands() error {
 	m := http.NewServeMux()
-	m.Handle("/dag/push", newPushHandler(p.host))
-	m.Handle("/dag/pull", newPullHandler(p.host))
+	m.Handle("/dag/push/new", newPushHandler(p.host))
+	m.Handle("/dag/pull/new", newPullHandler(p.host))
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 

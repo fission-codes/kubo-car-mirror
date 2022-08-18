@@ -74,13 +74,13 @@ var (
 type Config struct {
 	// Provide a listening address to have CarMirror spin up an HTTP server when
 	// StartRemote(ctx) is called
-	HTTPRemoteAddress string
+	HTTPRemoteAddr string
 }
 
 // Validate confirms the configuration is valid
 func (cfg *Config) Validate() error {
-	if cfg.HTTPRemoteAddress == "" {
-		return fmt.Errorf("HTTPRemoteAddress is required")
+	if cfg.HTTPRemoteAddr == "" {
+		return fmt.Errorf("HTTPRemoteAddr is required")
 	}
 
 	return nil
@@ -111,12 +111,12 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 		sessionTTLDur: time.Second * 30,
 	}
 
-	if cfg.HTTPRemoteAddress != "" {
+	if cfg.HTTPRemoteAddr != "" {
 		m := http.NewServeMux()
 		m.Handle("/dag", HTTPRemoteHandler(cm))
 
 		cm.httpServer = &http.Server{
-			Addr:    cfg.HTTPRemoteAddress,
+			Addr:    cfg.HTTPRemoteAddr,
 			Handler: m,
 		}
 	}
