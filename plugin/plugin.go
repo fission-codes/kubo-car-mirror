@@ -40,7 +40,7 @@ type CarMirrorPlugin struct {
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
 		LogLevel:         "info",
-		HTTPRemoteAddr:   "127.0.0.1:5001",
+		HTTPRemoteAddr:   "127.0.0.1:2503",
 		HTTPCommandsAddr: "127.0.0.1:2502",
 	}
 }
