@@ -39,11 +39,8 @@ type CarMirrorPlugin struct {
 // list before anyone can push to this node
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
-		LogLevel: "info",
-		// 5001 is ipfs API
-		// 5002 for car mirror?
-		// Looks like both of these are different
-		HTTPRemoteAddr:   ":2503",
+		LogLevel:         "info",
+		HTTPRemoteAddr:   "127.0.0.1:5001",
 		HTTPCommandsAddr: "127.0.0.1:2502",
 	}
 }

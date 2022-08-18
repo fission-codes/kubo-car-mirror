@@ -4,6 +4,54 @@ test_description="Test CAR Mirror"
 
 . lib/test-lib.sh
 
+default_ipfs_remote_port=4001
+default_cm_port=2504
+
+cm_port() {
+  node=$1
+  echo $((default_cm_port + $node))
+}
+
+cm_command_addr() {
+  node=$1
+  echo "127.0.0.1:$(cm_port $node)"
+}
+
+ipfs_remote_port() {
+  node=$1
+  echo $((default_ipfs_remote_port + $node))
+}
+
+ipfs_remote_addr() {
+  node=$1
+  echo "127.0.0.1:$(ipfs_remote_port $node)"
+}
+
+configure_cm_ports() {
+  num_nodes=$1
+  for ((node=0; node<$num_nodes; node++)); do
+    test_expect_success "configure car mirror port for node $node" "
+      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr '\""$(cm_command_addr $node)"\"' &&
+      ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '\""$(ipfs_remote_addr $node)"\"' &&
+      ipfsi $node config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node_config &&
+      test_should_contain \""$(cm_command_addr $node)"\" node_config &&
+      ipfsi $node config Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr > node_config &&
+      test_should_contain \""$(ipfs_remote_addr $node)"\" node_config
+    "
+  done
+}
+
+# car mirror equivalent of ipfsi, allowing us to call the car mirror cli for a given node
+
+cmi() {
+  node="$1"
+  dir=$node
+  shift
+  IPFS_PATH="$IPTB_ROOT/testbeds/default/$dir" ipfs "$@"
+
+  cm --command-address $(cm_command_addr $node) $@
+}
+
 # Don't connect nodes together.
 # Shouldn't matter since we run commands with --offline, but just to be safe...
 startup_cluster_disconnected() {
@@ -34,7 +82,8 @@ check_file_fetch() {
   '
 
   test_expect_success "file looks good" '
-    test_cmp $fname fetch_out
+    ipfsi $node cat $fhash --offline > /dev/null 2> fetch_error
+    test_should_not_contain "could not find $fhash" fetch_error
   '
 }
 
@@ -49,50 +98,27 @@ check_no_file_fetch() {
 
 }
 
-check_dir_fetch() {
+check_has_cid_root() {
   node=$1
-  ref=$2
+  cid=$2
 
-  test_expect_success "node can fetch all refs for dir" '
-    ipfsi $node refs -r $ref --offline > /dev/null
+  test_expect_success "node $node can get cid root $cid" '
+    ipfsi $node get $cid --offline >/dev/null 2> get_error
+    test_should_not_contain "block was not found locally" get_error
   '
 }
 
-check_no_dir_fetch() {
+check_not_has_cid_root() {
   node=$1
-  ref=$2
+  cid=$2
 
-  test_expect_success "node cannot fetch all refs for dir" '
-    ipfsi $node refs -r $ref --offline > /dev/null 2> fetch_error
-    test_should_contain "could not find $ref" fetch_error
+  test_expect_success "node $node can get cid root $cid" '
+    ipfsi $node get $cid --offline >/dev/null 2> get_error
+    test_should_contain "block was not found locally" get_error
   '
-
 }
 
-run_single_file_test() {
-  test_expect_success "add a file on node1" '
-    random 1000000 > filea &&
-    FILEA_HASH=$(ipfsi 0 add -q filea)
-  '
-
-  check_file_fetch 0 $FILEA_HASH filea
-  check_no_file_fetch 1 $FILEA_HASH
-}
-
-run_random_dir_test() {
-  test_expect_success "create a bunch of random files" '
-    random-files -depth=3 -dirs=4 -files=5 -seed=5 foobar > /dev/null
-  '
-
-  test_expect_success "add those on node 0" '
-    DIR_HASH=$(ipfsi 0 add -r -Q foobar)
-  '
-
-  check_dir_fetch 0 $DIR_HASH
-  check_no_dir_fetch 1 $DIR_HASH
-}
-
-run_advanced_test() {
+run_pull_test() {
   startup_cluster_disconnected 2 "$@"
 
   test_expect_success "clean repo before test" '
@@ -100,18 +126,28 @@ run_advanced_test() {
     ipfsi 1 repo gc > /dev/null
   '
 
+  configure_cm_port 2
+
   test_expect_success "import test CAR file on node 0" '
     ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
   '
 
-  run_single_file_test
-  # run_random_dir_test
+  check_has_cid_root 0 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  check_not_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+
+  # pull CIDs from node 0 to node 1
 
   # Just confirming car mirror is serving over the right port
   test_expect_success "curl" '
     curl -v --data-binary @../t0000-car-mirror-data/pull.cbor "http://localhost:2504/dag/pull" --output blah.car 2> curl_out &&
     test_should_not_contain "Internal Server Error" curl_out
   '
+
+  # test_expect_success "car mirror pull works" '
+  #   cmi 1 pull --from $(cm_command_addr 0)
+  # '
+
+  # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
@@ -123,17 +159,9 @@ test_expect_success "set up testbed" '
 '
 
 test_expect_success "configure the plugin" '
-  ipfsi 0 config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr \""127.0.0.1:2504"\" &&
-  ipfsi 1 config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr \""127.0.0.1:2505"\"
+  configure_cm_ports 2
 '
 
-test_expect_success "confirm correct ports configured" '
-  ipfsi 0 config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node0_config &&
-  ipfsi 1 config Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr > node1_config &&
-  test_should_contain "127.0.0.1:2504" node0_config &&
-  test_should_contain "127.0.0.1:2505" node1_config
-'
-
-run_advanced_test
+run_pull_test
 
 test_done

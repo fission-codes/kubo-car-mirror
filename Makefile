@@ -4,11 +4,14 @@ TEST_NAME = t0000-car-mirror
 
 default: test
 
+all: build build-plugin test sharness
+
 clean:
 	go clean ./...
 
 build:
 	go build ./...
+	go build -o ./cm ./plugin/cli/carmirror.go
 
 setup-plugin:
 	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
@@ -27,25 +30,25 @@ test:
 	go test ./... -v --coverprofile=coverage.txt --covermode=atomic
 
 sharness:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp cm ../kubo/test/bin/cm
 	$(MAKE) -C ../kubo/test/sharness $(TEST_NAME).sh
-	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data
+	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/cm
 
 sharness-v:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp cm ../kubo/test/bin/cm
 	$(MAKE) -C ../kubo/test/sharness deps
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh -v
-	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data
+	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/cm
 
 sharness-no-deps:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp cm ../kubo/test/bin/cm
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh
-	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data
+	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/cm
 
 sharness-no-deps-v:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp cm ../kubo/test/bin/cm
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh -v
-	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data
+	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/cm
 
 update-deps:
 	go get -u ./... & go mod tidy
