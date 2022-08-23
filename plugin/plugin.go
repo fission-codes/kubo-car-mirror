@@ -2,13 +2,9 @@ package plugin
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 	"net/http"
-	"strconv"
 
 	carmirror "github.com/fission-codes/go-car-mirror/carmirror"
-	"github.com/fission-codes/go-car-mirror/payload"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	plugin "github.com/ipfs/kubo/plugin"
@@ -37,8 +33,8 @@ type CarMirrorPlugin struct {
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
 		LogLevel:         "info",
-		HTTPRemoteAddr:   ":2503",
-		HTTPCommandsAddr: "127.0.0.1:2502",
+		HTTPRemoteAddr:   ":2503",          // for requests we expose remotely, which are protocol level concerns
+		HTTPCommandsAddr: "127.0.0.1:2502", // for requests we only allow to be initiated locally, which are application level concerns
 	}
 }
 
@@ -55,6 +51,7 @@ func (*CarMirrorPlugin) Version() string {
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 	p.loadConfig(env.Config)
+	// I don't like this because it overrides env vars.
 	// golog.SetLogLevel("car-mirror-plugin", p.LogLevel)
 	log.Debugf("%s: Init(%v), env.Config = %v\n", p.Name(), env, env.Config)
 	return nil
@@ -76,10 +73,12 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 		return err
 	}
 
+	// Start the CAR Mirror protocol server
 	if err = p.host.StartRemote(context.Background()); err != nil {
 		return err
 	}
 
+	// Start the application level server
 	go p.listenLocalCommands()
 
 	log.Debugf("carmirror plugin started. listening for commands: %s\n", p.HTTPCommandsAddr)
@@ -93,90 +92,13 @@ func (p *CarMirrorPlugin) Close() error {
 
 func (p *CarMirrorPlugin) listenLocalCommands() error {
 	m := http.NewServeMux()
-	m.Handle("/dag/push/new", newPushHandler(p.host))
-	m.Handle("/dag/pull/new", newPullHandler(p.host))
+	// The CAR Mirror spec doesn't specify how a user initiates a new session.
+	// That is an application concern, not protocol, and we've decided to initiate the request
+	// via a request to the endpoints below.  Once a request for a new push or pull session has been received,
+	// the running CAR Mirror server can then handle the protocol level concerns.
+	m.Handle("/dag/push/new", carmirror.NewPushHandler(p.host))
+	m.Handle("/dag/pull/new", carmirror.NewPullHandler(p.host))
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
-}
-
-func newPushHandler(p *carmirror.CarMirror) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
-			if err != nil {
-				stream = false
-			}
-
-			diff := r.URL.Query().Get("diff")
-
-			body, err := ioutil.ReadAll(r.Body)
-			defer r.Body.Close()
-			if err != nil {
-				errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
-				http.Error(w, errStr, 500)
-				return
-			}
-
-			var pushRequest payload.PushRequestor
-			if err := payload.CborDecode(body, &pushRequest); err != nil {
-				errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
-				http.Error(w, errStr, 500)
-				return
-			}
-			log.Debugf("/dag/push, stream=%v, diff=%v, request=%v\n", stream, diff, pushRequest)
-			// TODO: do something like carmirror.NewPush
-			log.Debug("push")
-		}
-	})
-}
-
-func newPullHandler(p *carmirror.CarMirror) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO(JJ)
-		// - parse args
-		// - pass args to carmirror.NewPull
-		// - pull.Do or similar
-		// - parse results and return
-		switch r.Method {
-		case "POST":
-			log.Debug("pull")
-			stream, err := strconv.ParseBool(r.URL.Query().Get("stream"))
-			if err != nil {
-				stream = false
-			}
-
-			body, err := ioutil.ReadAll(r.Body)
-			defer r.Body.Close()
-			if err != nil {
-				errStr := fmt.Sprintf("Failed to read request body. Error=%v", err.Error())
-				http.Error(w, errStr, 500)
-				return
-			}
-
-			var pullRequest payload.PullRequestor
-			if err := payload.CborDecode(body, &pullRequest); err != nil {
-				errStr := fmt.Sprintf("Failed to decode CBOR. Error=%v", err.Error())
-				http.Error(w, errStr, 500)
-				return
-			}
-			log.Debug("pull")
-			// could make generic with .Do that takes context, like dsync
-			cids, err := p.GetLocalCids(r.Context(), pullRequest.RS[0])
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			log.Debugf("/dag/pull, stream=%v, request=%v, cids=%v\n", stream, pullRequest, cids)
-
-			if err = p.WriteCar(r.Context(), cids, w); err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-
-			return
-			// TODO: do something like carmirror.NewPull
-		}
-	})
 }
 
 func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {

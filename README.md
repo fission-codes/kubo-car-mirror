@@ -45,6 +45,12 @@ make sharness
 
 # Run sharness tests verbosely
 make sharness-v
+
+# Run sharness tests without downloading deps
+make sharness-no-deps
+
+# Run sharness tests verbosely without downloading deps
+make sharness-no-deps-v
 ```
 
 ## Running
@@ -59,7 +65,7 @@ Once built, the kubo daemon has the CAR Mirror plugin baked in.
 GOLOG_LOG_LEVEL="car-mirror=debug,car-mirror-plugin=debug" ../kubo/cmd/ipfs daemon
 ```
 
-As a convenience, you can interact with CAR Mirror APIs using the `carmirror` CLI.
+You can interact with local CAR Mirror APIs using the `carmirror` CLI.
 
 ```
 # Push
@@ -67,6 +73,43 @@ As a convenience, you can interact with CAR Mirror APIs using the `carmirror` CL
 
 # Pull
 ./cmd/carmirror pull ...
+```
+
+During development, you might want to run in a testbed with iptb.  This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
+
+```
+Run iptb manually
+```shell
+# set up path, functions, etc
+source test/lib/carmirror-lib.sh
+
+# Create a 2 node testbed
+iptb_new
+
+# Start the daemons
+iptb_start
+
+# import test car file to node 0
+ipfsi 0 dag import test/sharness/t0000-car-mirror-data/car-mirror.car
+
+# confirm CID is on node 0
+ipfsi 0 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+
+# confirm CID is not on node 1
+ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+
+# push CID from node 0 to node 1
+carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
+
+# confirm CID is on node 1 now
+ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+
+# See testbed daemon logs
+iptb_logs
+
+# shutdown and cleanup
+iptb_stop
+iptb_remove
 ```
 
 ## Configuration
@@ -86,4 +129,4 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 
 ## Acknowledgements
 
-A big thank you to the [qri-io](https://github.com/qri-io) team, whose [dsync](https://github.com/qri-io/dag) project helped save a ton of time in getting this codebase organized. 🙏
+A big thank you 🙏 to the [Qri](https://github.com/qri-io) team, whose [Dsync](https://github.com/qri-io/dag) project helped save a ton of time in getting this codebase started.

@@ -2,9 +2,11 @@ package carmirror
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fission-codes/go-car-mirror/dag"
@@ -38,9 +40,10 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
+	Push(lng ipld.NodeGetter, cids []cid.Cid) (err error)
+	// NewPushSession(cid cid.Cid) (err error)
 	// NewPushSession()
 	// NewPullSession()
-	// Push()
 	// Pull()
 	// Something with protocol verion? or not needed?
 }
@@ -65,10 +68,10 @@ type CarMirror struct {
 	sessionTTLDur time.Duration
 }
 
-var (
-	// compile-time assertion that CarMirror satisfies the remote interface
-	_ CarMirrorable = (*CarMirror)(nil)
-)
+// var (
+// 	// compile-time assertion that CarMirror satisfies the remote interface
+// 	_ CarMirrorable = (*CarMirror)(nil)
+// )
 
 // Config encapsulates optional CAR Mirror configuration
 type Config struct {
@@ -150,9 +153,144 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 
 // TODO: Add other methods below
 
-func (cm *CarMirror) NewPushSession() {}
-func (cm *CarMirror) NewPullSession() {
+// func (cm *CarMirror) NewPushSession() {}
 
+func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err error) {
+	if strings.HasPrefix(remoteAddr, "http") {
+		rem = &HTTPClient{URL: remoteAddr}
+	} else {
+		return nil, fmt.Errorf("unrecognized remote address string: %s", remoteAddr)
+	}
+
+	return rem, nil
+}
+
+// NewPush creates a push to a remote address
+func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, diff string, stream bool) (*Push, error) {
+	cids, err := cm.GetLocalCids(ctx, cidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	rem, err := cm.mirrorableRemote(remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPush(cm.lng, cids, rem, stream), nil
+}
+
+type PushParams struct {
+	Cid    string
+	Addr   string
+	Diff   string
+	Stream bool
+}
+
+type PullParams struct {
+	Cid    string
+	Addr   string
+	Stream bool
+}
+
+// NewPush creates a push to a remote address
+func (cm *CarMirror) NewPull(cidStr, remoteAddr string, stream bool) (*Pull, error) {
+	id, err := cid.Parse(cidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	rem, err := cm.mirrorableRemote(remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPull(cm.lng, id, rem, stream), nil
+}
+
+func NewPushHandler(cm *CarMirror) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PushParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Diff:   r.FormValue("diff"),
+				Stream: r.FormValue("stream") == "true",
+			}
+
+			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
+
+			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
+			if err != nil {
+				fmt.Printf("error creating push: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			if err = push.Do(r.Context()); err != nil {
+				fmt.Printf("push error: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			fmt.Println("push complete")
+
+			data, err := json.Marshal(p)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+
+			// Write out JSON encoded params for the request
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(data)
+		}
+	})
+}
+
+func (cm *CarMirror) NewPushSession(cid cid.Cid) error {
+	return nil
+}
+
+func NewPullHandler(cm *CarMirror) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PullParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Stream: r.FormValue("stream") == "true",
+			}
+
+			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Stream)
+
+			pull, err := cm.NewPull(p.Cid, p.Addr, p.Stream)
+			if err != nil {
+				fmt.Printf("error creating pull: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			if err = pull.Do(r.Context()); err != nil {
+				fmt.Printf("pull error: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			fmt.Println("pull complete")
+
+			data, err := json.Marshal(p)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+
+			// Write out JSON encoded params for the request
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(data)
+		}
+	})
 }
 
 // GetLocalCids returns a unique list of `cid.CID`s underneath a given root CID, using an offline CoreAPI.

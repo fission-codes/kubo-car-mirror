@@ -2,11 +2,36 @@ package carmirror
 
 import (
 	"net/http"
+
+	"github.com/ipfs/go-cid"
+	format "github.com/ipfs/go-ipld-format"
+	ipld "github.com/ipfs/go-ipld-format"
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
 )
+
+// HTTPClient is the request side of doing dsync over HTTP
+type HTTPClient struct {
+	URL        string
+	NodeGetter format.NodeGetter
+	BlockAPI   coreiface.BlockAPI
+	// remProtocolID protocol.ID
+}
 
 const (
 	httpCarMirrorProtocolIDHeader = "car-mirror-version"
 )
+
+func (rem *HTTPClient) Push(lng ipld.NodeGetter, cids []cid.Cid) error {
+	log.Debugf("HTTPClient.Push")
+
+	return nil
+}
+
+// func (rem *HTTPClient) NewPushSession() (PushSession, error) {
+// 	return &httpPushSession{
+// 		rem: rem,
+// 	}, nil
+// }
 
 // HTTPRemoteHandler exposes a CarMirror remote over HTTP by exposing a HTTP handler
 // that interlocks with methods exposed by HTTPClient

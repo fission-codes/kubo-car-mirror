@@ -27,6 +27,17 @@ cm_remote_addr() {
   echo ":$(cm_remote_port $node)"
 }
 
+# TODO: Simplify if config should include http:// as well
+cm_cli_commands_addr() {
+  node=$1
+  echo "http:$(cm_commands_addr $node)"
+}
+
+cm_cli_remote_addr() {
+  node=$1
+  echo "http://127.0.0.1$(cm_remote_addr $node)"
+}
+
 configure_cm_ports() {
   num_nodes=$1
   for ((node=0; node<$num_nodes; node++)); do
@@ -46,7 +57,7 @@ carmirrori() {
   node="$1"
   shift
 
-  carmirror --commands-address "$(cm_commands_addr $node)" "$@"
+  carmirror --commands-address "$(cm_cli_commands_addr $node)" "$@"
 }
 
 # Don't connect nodes together.
@@ -115,15 +126,13 @@ check_not_has_cid_root() {
   '
 }
 
-run_pull_test() {
+run_push_test() {
   startup_cluster_disconnected 2 "$@"
 
   test_expect_success "clean repo before test" '
     ipfsi 0 repo gc > /dev/null &&
     ipfsi 1 repo gc > /dev/null
   '
-
-  # configure_cm_ports 2
 
   test_expect_success "import test CAR file on node 0" '
     ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
@@ -132,18 +141,38 @@ run_pull_test() {
   check_has_cid_root 0 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
   check_not_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 
-  # pull CIDs from node 0 to node 1
-
-  # Just confirming car mirror is serving over the right port
-  test_expect_success "curl" '
-    curl -v --data-binary @../t0000-car-mirror-data/pull.cbor "http://localhost:2502/dag/pull/new" --output blah.car 2> curl_out &&
-    test_should_not_contain "Internal Server Error" curl_out
+  test_expect_success "can push from node 0 to node 1" '
+    carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
   '
 
-  test_expect_success "car mirror push works" '
-    carmirrori 0 push --commands-address $(cm_commands_addr 1) QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_remote_addr )
+  # TODO: uncomment
+  # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+
+  test_expect_success "shut down nodes" '
+    iptb stop && iptb_wait_stop
+  '
+}
+
+run_pull_test() {
+  startup_cluster_disconnected 2 "$@"
+
+  test_expect_success "clean repo before test" '
+    ipfsi 0 repo gc > /dev/null &&
+    ipfsi 1 repo gc > /dev/null
   '
 
+  test_expect_success "import test CAR file on node 0" '
+    ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
+  '
+
+  check_has_cid_root 0 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  check_not_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+
+  test_expect_success "can pull from node 0 to node 1" '
+    carmirrori 1 pull QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 0)
+  '
+
+  # TODO: uncomment
   # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 
   test_expect_success "shut down nodes" '
@@ -159,6 +188,7 @@ test_expect_success "configure the plugin" '
   configure_cm_ports 2
 '
 
+run_push_test
 run_pull_test
 
 test_done

@@ -45,7 +45,7 @@ var push = &cobra.Command{
 // pull
 var pull = &cobra.Command{
 	Use:   "pull",
-	Short: "copy remote cid from peer to local repo",
+	Short: "copy remote cid from remote addr to local repo",
 	Run: func(cmd *cobra.Command, args []string) {
 		cid := args[0]
 		addr := args[1]
@@ -56,7 +56,7 @@ var pull = &cobra.Command{
 			fmt.Println(err.Error())
 			return
 		}
-		// fmt.Println(res)
+
 		fmt.Printf("pulled cid %s from:\n\t%s\n", cid, addr)
 	},
 }
@@ -88,6 +88,7 @@ func doRemoteHTTPReq(method, endpoint string) (resMsg string, err error) {
 	}
 	defer res.Body.Close()
 
+	log.Debugf("before reading all body, err=%v", err)
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if resBytes == nil {
 		return
