@@ -40,5 +40,5 @@ func (push *Push) Do(ctx context.Context) (err error) {
 	// }
 	// log.Debugf("push has receive session: %s", push.sid)
 
-	return push.remote.Push(push.lng, push.cids)
+	return push.remote.Push(ctx, push.cids)
 }

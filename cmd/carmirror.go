@@ -33,12 +33,14 @@ var push = &cobra.Command{
 		addr := args[1]
 		endpoint := fmt.Sprintf("/dag/push/new?cid=%s&addr=%s", cid, addr)
 
-		_, err := doRemoteHTTPReq("POST", endpoint)
+		res, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
+		// TODO: proper response handling
 		fmt.Printf("pushed cid %s to:\n\t%s\n", cid, addr)
+		fmt.Printf("response = %s\n", res)
 	},
 }
 

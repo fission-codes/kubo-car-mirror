@@ -18,6 +18,7 @@ import (
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	carv1 "github.com/ipld/go-car"
+	"github.com/pkg/errors"
 )
 
 var log = golog.Logger("car-mirror")
@@ -40,7 +41,7 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
-	Push(lng ipld.NodeGetter, cids []cid.Cid) (err error)
+	Push(ctx context.Context, cids []cid.Cid) (err error)
 	// NewPushSession(cid cid.Cid) (err error)
 	// NewPushSession()
 	// NewPullSession()
@@ -116,7 +117,8 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 
 	if cfg.HTTPRemoteAddr != "" {
 		m := http.NewServeMux()
-		m.Handle("/dag", HTTPRemoteHandler(cm))
+		m.Handle("/dag/push", HTTPRemotePushHandler(cm))
+		m.Handle("/dag/pull", HTTPRemotePullHandler(cm))
 
 		cm.httpServer = &http.Server{
 			Addr:    cfg.HTTPRemoteAddr,
@@ -157,7 +159,7 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 
 func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err error) {
 	if strings.HasPrefix(remoteAddr, "http") {
-		rem = &HTTPClient{URL: remoteAddr}
+		rem = &HTTPClient{URL: remoteAddr, NodeGetter: cm.lng, BlockAPI: cm.bapi}
 	} else {
 		return nil, fmt.Errorf("unrecognized remote address string: %s", remoteAddr)
 	}
@@ -169,12 +171,12 @@ func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err
 func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, diff string, stream bool) (*Push, error) {
 	cids, err := cm.GetLocalCids(ctx, cidStr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to get local cids for cid %v", cidStr)
 	}
 
 	rem, err := cm.mirrorableRemote(remoteAddr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to get mirrorable remote for addr %v", remoteAddr)
 	}
 
 	return NewPush(cm.lng, cids, rem, stream), nil
@@ -221,20 +223,24 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 
 			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
 
+			log.Debugf("Before NewPush")
 			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
 			if err != nil {
 				fmt.Printf("error creating push: %s\n", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
+			log.Debugf("After NewPush")
 
+			log.Debugf("Before push.Do")
 			if err = push.Do(r.Context()); err != nil {
-				fmt.Printf("push error: %s\n", err.Error())
+				log.Debugf("push error: %s\n", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
+			log.Debugf("After push.Do")
 
-			fmt.Println("push complete")
+			log.Debugf("push complete")
 
 			data, err := json.Marshal(p)
 			if err != nil {
@@ -300,19 +306,19 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 	var cids []cid.Cid
 	rootCid, err := dag.ParseCid(rootCidStr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to parse root cid %s", rootCidStr)
 	}
 	cids = append(cids, *rootCid)
 
 	rp, err := cm.capi.ResolvePath(ctx, path.New(rootCidStr))
 	if err != nil {
-		return cids, err
+		return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", rootCidStr)
 	}
 
 	nodeGetter := mdag.NewSession(ctx, cm.lng)
 	obj, err := nodeGetter.Get(ctx, rp.Cid())
 	if err != nil {
-		return cids, err
+		return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", rootCidStr)
 	}
 	err = traverse.Traverse(obj, traverse.Options{
 		DAG:   nodeGetter,
@@ -325,7 +331,7 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 		SkipDuplicates: true,
 	})
 	if err != nil {
-		return cids, fmt.Errorf("error traversing DAG: %w", err)
+		return cids, errors.Wrapf(err, "error traversing DAG: %w", err)
 	}
 
 	return cids, nil

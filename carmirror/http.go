@@ -1,12 +1,18 @@
 package carmirror
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 
+	"github.com/fission-codes/go-car-mirror/payload"
 	"github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
-	ipld "github.com/ipfs/go-ipld-format"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	carv1 "github.com/ipld/go-car"
 )
 
 // HTTPClient is the request side of doing dsync over HTTP
@@ -21,8 +27,45 @@ const (
 	httpCarMirrorProtocolIDHeader = "car-mirror-version"
 )
 
-func (rem *HTTPClient) Push(lng ipld.NodeGetter, cids []cid.Cid) error {
+func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
 	log.Debugf("HTTPClient.Push")
+
+	var b bytes.Buffer
+	w := bufio.NewWriter(&b)
+
+	if err := carv1.WriteCar(ctx, rem.NodeGetter, cids, w); err != nil {
+		return err
+	}
+
+	pl := payload.PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
+	plBytes, err := payload.CborEncode(pl)
+	if err != nil {
+		return err
+	}
+	plReader := bytes.NewReader(plBytes)
+
+	url := fmt.Sprintf("%s%s", rem.URL, "/dag/push")
+	req, err := http.NewRequest("POST", url, plReader)
+	log.Debugf("req = %v", req)
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	log.Debugf("res = %v", res)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	log.Debugf("before reading all body, err=%v", err)
+	resBytes, err := ioutil.ReadAll(res.Body)
+	if resBytes == nil {
+		return err
+	}
+
+	resMsg := string(resBytes)
+	log.Debugf("expected response to be nil, got %v", resMsg)
 
 	return nil
 }
@@ -33,9 +76,26 @@ func (rem *HTTPClient) Push(lng ipld.NodeGetter, cids []cid.Cid) error {
 // 	}, nil
 // }
 
+func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Debugf("In HTTPRemotePushHandler")
+		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Debugf("In HTTPRemotePullHandler")
+		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // HTTPRemoteHandler exposes a CarMirror remote over HTTP by exposing a HTTP handler
 // that interlocks with methods exposed by HTTPClient
 func HTTPRemoteHandler(ds *CarMirror) http.HandlerFunc {
+	// TODO: Add handler for /push and /pull
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
 

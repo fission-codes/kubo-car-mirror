@@ -40,7 +40,7 @@ cm_remote_addr() {
 # TODO: Simplify if config should include http:// as well
 cm_cli_commands_addr() {
   node=$1
-  echo "http:$(cm_commands_addr $node)"
+  echo "http://$(cm_commands_addr $node)"
 }
 
 cm_cli_remote_addr() {
@@ -51,8 +51,8 @@ cm_cli_remote_addr() {
 configure_cm_ports() {
   num_nodes=$1
   for ((node=0; node<$num_nodes; node++)); do
-    ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr '"$(cm_commands_addr $node)"'
-    ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '"$(cm_remote_addr $node)"'
+    ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr "\"$(cm_commands_addr $node)\""
+    ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr "\"$(cm_remote_addr $node)\""
   done
 }
 
