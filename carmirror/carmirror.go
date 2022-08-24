@@ -2,9 +2,11 @@ package carmirror
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fission-codes/go-car-mirror/dag"
@@ -16,6 +18,7 @@ import (
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	carv1 "github.com/ipld/go-car"
+	"github.com/pkg/errors"
 )
 
 var log = golog.Logger("car-mirror")
@@ -38,9 +41,11 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
+	Push(ctx context.Context, cids []cid.Cid) (err error)
+	Pull(ctx context.Context, cids []cid.Cid) (err error)
+	// NewPushSession(cid cid.Cid) (err error)
 	// NewPushSession()
 	// NewPullSession()
-	// Push()
 	// Pull()
 	// Something with protocol verion? or not needed?
 }
@@ -65,22 +70,22 @@ type CarMirror struct {
 	sessionTTLDur time.Duration
 }
 
-var (
-	// compile-time assertion that CarMirror satisfies the remote interface
-	_ CarMirrorable = (*CarMirror)(nil)
-)
+// var (
+// 	// compile-time assertion that CarMirror satisfies the remote interface
+// 	_ CarMirrorable = (*CarMirror)(nil)
+// )
 
 // Config encapsulates optional CAR Mirror configuration
 type Config struct {
 	// Provide a listening address to have CarMirror spin up an HTTP server when
 	// StartRemote(ctx) is called
-	HTTPRemoteAddress string
+	HTTPRemoteAddr string
 }
 
 // Validate confirms the configuration is valid
 func (cfg *Config) Validate() error {
-	if cfg.HTTPRemoteAddress == "" {
-		return fmt.Errorf("HTTPRemoteAddress is required")
+	if cfg.HTTPRemoteAddr == "" {
+		return fmt.Errorf("HTTPRemoteAddr is required")
 	}
 
 	return nil
@@ -111,12 +116,13 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 		sessionTTLDur: time.Second * 30,
 	}
 
-	if cfg.HTTPRemoteAddress != "" {
+	if cfg.HTTPRemoteAddr != "" {
 		m := http.NewServeMux()
-		m.Handle("/dag", HTTPRemoteHandler(cm))
+		m.Handle("/dag/push", HTTPRemotePushHandler(cm))
+		m.Handle("/dag/pull", HTTPRemotePullHandler(cm))
 
 		cm.httpServer = &http.Server{
-			Addr:    cfg.HTTPRemoteAddress,
+			Addr:    cfg.HTTPRemoteAddr,
 			Handler: m,
 		}
 	}
@@ -150,9 +156,151 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 
 // TODO: Add other methods below
 
-func (cm *CarMirror) NewPushSession() {}
-func (cm *CarMirror) NewPullSession() {
+// func (cm *CarMirror) NewPushSession() {}
 
+func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err error) {
+	if strings.HasPrefix(remoteAddr, "http") {
+		rem = &HTTPClient{URL: remoteAddr, NodeGetter: cm.lng, BlockAPI: cm.bapi}
+	} else {
+		return nil, fmt.Errorf("unrecognized remote address string: %s", remoteAddr)
+	}
+
+	return rem, nil
+}
+
+// NewPush creates a push to a remote address
+func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, diff string, stream bool) (*Push, error) {
+	cids, err := cm.GetLocalCids(ctx, cidStr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to get local cids for cid %v", cidStr)
+	}
+
+	rem, err := cm.mirrorableRemote(remoteAddr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to get mirrorable remote for addr %v", remoteAddr)
+	}
+
+	return NewPush(cm.lng, cids, rem, stream), nil
+}
+
+type PushParams struct {
+	Cid    string
+	Addr   string
+	Diff   string
+	Stream bool
+}
+
+type PullParams struct {
+	Cid    string
+	Addr   string
+	Stream bool
+}
+
+// NewPush creates a push to a remote address
+func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
+	id, err := cid.Parse(cidStr)
+	if err != nil {
+		return nil, err
+	}
+	cids := []cid.Cid{id}
+
+	rem, err := cm.mirrorableRemote(remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPull(cm.lng, cids, rem, stream), nil
+}
+
+func NewPushHandler(cm *CarMirror) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PushParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Diff:   r.FormValue("diff"),
+				Stream: r.FormValue("stream") == "true",
+			}
+
+			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
+
+			log.Debugf("Before NewPush")
+			// Need list of cids here, since protocol takes list.
+			// so move getting list of cids to this level
+			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
+			if err != nil {
+				fmt.Printf("error creating push: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+			log.Debugf("After NewPush")
+
+			log.Debugf("Before push.Do")
+			if err = push.Do(r.Context()); err != nil {
+				log.Debugf("push error: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+			log.Debugf("After push.Do")
+
+			log.Debugf("push complete")
+
+			data, err := json.Marshal(p)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+
+			// Write out JSON encoded params for the request
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(data)
+		}
+	})
+}
+
+func (cm *CarMirror) NewPushSession(cid cid.Cid) error {
+	return nil
+}
+
+func NewPullHandler(cm *CarMirror) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PullParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Stream: r.FormValue("stream") == "true",
+			}
+
+			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Stream)
+
+			pull, err := cm.NewPull(r.Context(), p.Cid, p.Addr, p.Stream)
+			if err != nil {
+				fmt.Printf("error creating pull: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			if err = pull.Do(r.Context()); err != nil {
+				fmt.Printf("pull error: %s\n", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			fmt.Println("pull complete")
+
+			data, err := json.Marshal(p)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+
+			// Write out JSON encoded params for the request
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(data)
+		}
+	})
 }
 
 // GetLocalCids returns a unique list of `cid.CID`s underneath a given root CID, using an offline CoreAPI.
@@ -162,19 +310,19 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 	var cids []cid.Cid
 	rootCid, err := dag.ParseCid(rootCidStr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to parse root cid %s", rootCidStr)
 	}
 	cids = append(cids, *rootCid)
 
 	rp, err := cm.capi.ResolvePath(ctx, path.New(rootCidStr))
 	if err != nil {
-		return cids, err
+		return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", rootCidStr)
 	}
 
 	nodeGetter := mdag.NewSession(ctx, cm.lng)
 	obj, err := nodeGetter.Get(ctx, rp.Cid())
 	if err != nil {
-		return cids, err
+		return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", rootCidStr)
 	}
 	err = traverse.Traverse(obj, traverse.Options{
 		DAG:   nodeGetter,
@@ -187,7 +335,7 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 		SkipDuplicates: true,
 	})
 	if err != nil {
-		return cids, fmt.Errorf("error traversing DAG: %w", err)
+		return cids, errors.Wrapf(err, "error traversing DAG: %w", err)
 	}
 
 	return cids, nil

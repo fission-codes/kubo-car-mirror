@@ -91,6 +91,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/ipfs/kubo v0.14.0
 	github.com/ipld/go-car v0.4.0
+	github.com/spf13/cobra v0.0.5
 	github.com/zeebo/xxh3 v1.0.2
 	gotest.tools v2.2.0+incompatible
 )
@@ -129,6 +130,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-bitfield v1.0.0 // indirect
 	github.com/ipfs/go-delegated-routing v0.3.0 // indirect
@@ -185,6 +187,7 @@ require (
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/tidwall/gjson v1.14.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
