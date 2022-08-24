@@ -12,8 +12,19 @@ jobs:
       COVERAGES: ""
     runs-on: ${{ matrix.os }}-latest
     name: ${{ matrix.os}} (go ${{ matrix.go }})
+    defaults:
+      run:
+        working-directory: go-car-mirror
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: go-car-mirror
+      - name: Checkout kubo repo
+        uses: actions/checkout@v3
+        with:
+          repository: ipfs/kubo
+          path: kubo
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
@@ -22,8 +33,10 @@ jobs:
           go version
           go env
       - name: Build
-        run: make build
+        run: make build build-plugin
       - name: Run tests
         run: make test
       - name: Check formatted
         run: gofmt -l .
+      - name: Run sharness tests
+        run: make sharness-v
