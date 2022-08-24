@@ -89,7 +89,10 @@ iptb_remove() {
 }
 
 iptb_logs() {
-  iptb logs
+  node="$1"
+  shift
+
+  iptb logs $node "$@"
 }
 
 echo "*** See README.md for instructions on setting up a testbed and running tests locally. ***"

@@ -98,11 +98,14 @@ ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/nul
 # push CID from node 0 to node 1
 carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
 
+# OR pull CID from node 0 to node 1
+carmirrori 1 pull QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 0)
+
 # Confirm push in logs from node 0
-iptb logs 0
+iptb_logs 0
 
 # Confirm push received in logs from node 1
-iptb logs 1
+iptb_logs 1
 
 # confirm CID is on node 1 now
 ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
