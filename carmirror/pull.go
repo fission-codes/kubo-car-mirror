@@ -9,18 +9,18 @@ import (
 
 type Pull struct {
 	stream bool
-	cid    cid.Cid
+	cids   []cid.Cid
 	lng    ipld.NodeGetter // local NodeGetter (Block Getter)
 	remote CarMirrorable   // place we're sending to
 }
 
 // NewPush initiates a pull to a remote.
-func NewPull(lng ipld.NodeGetter, id cid.Cid, remote CarMirrorable, stream bool) *Pull {
+func NewPull(lng ipld.NodeGetter, cids []cid.Cid, remote CarMirrorable, stream bool) *Pull {
 	pull := &Pull{
 		stream: stream,
 		lng:    lng,
 		remote: remote,
-		cid:    id,
+		cids:   cids,
 	}
 	return pull
 }
@@ -39,5 +39,6 @@ func (pull *Pull) Do(ctx context.Context) (err error) {
 	// log.Debugf("pull has receive session: %s", pull.sid)
 	// return pull.do(ctx)
 
-	return nil
+	return pull.remote.Pull(ctx, pull.cids)
+	// return nil
 }

@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/fission-codes/go-car-mirror/dag"
 	"github.com/fission-codes/go-car-mirror/payload"
 	"github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
@@ -25,6 +26,8 @@ type HTTPClient struct {
 
 const (
 	httpCarMirrorProtocolIDHeader = "car-mirror-version"
+	carMIMEType                   = "archive/car"
+	cborMIMEType                  = "application/cbor"
 )
 
 func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
@@ -50,6 +53,9 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
 
 	url := fmt.Sprintf("%s%s", rem.URL, "/dag/push")
 	req, err := http.NewRequest("POST", url, plReader)
+	req.Header.Set("Content-Type", cborMIMEType)
+	req.Header.Set("Accept", cborMIMEType)
+
 	log.Debugf("req = %v", req)
 	if err != nil {
 		return err
@@ -68,8 +74,58 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
 		return err
 	}
 
+	// TODO: we expect a CBOR response and should parse it for now.  Longer term it will be used for multiple rounds.
 	resMsg := string(resBytes)
 	log.Debugf("expected response to be nil, got %v", resMsg)
+
+	return nil
+}
+
+func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
+	// create payload
+	cidStrs := make([]string, len(cids))
+	for i, c := range cids {
+		cidStrs[i] = c.String()
+	}
+	pullRequest := payload.PullRequestor{RS: cidStrs, BK: 0, BB: nil}
+	plBytes, err := payload.CborEncode(pullRequest)
+	if err != nil {
+		return err
+	}
+	plReader := bytes.NewReader(plBytes)
+
+	// request the pull
+	url := fmt.Sprintf("%s%s", rem.URL, "/dag/pull")
+	req, err := http.NewRequest("POST", url, plReader)
+	req.Header.Set("Content-Type", cborMIMEType)
+	req.Header.Set("Accept", carMIMEType)
+
+	log.Debugf("req = %v", req)
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	log.Debugf("res = %v", res)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	// receive the car payload
+	log.Debugf("before reading all body, err=%v", err)
+	resBytes, err := ioutil.ReadAll(res.Body)
+	if resBytes == nil {
+		return err
+	}
+
+	// add car to local blockstore
+	_, err = AddAllFromCarReader(ctx, rem.BlockAPI, bytes.NewReader(resBytes), nil)
+	if err != nil {
+		// getting unexpected EOF as err here
+		log.Debugf("error in AddAllFromCarReader: err=%v", err.Error())
+		return err
+	}
 
 	return nil
 }
@@ -111,6 +167,17 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 		// log.Debugf("decoded payload = %v", pushRequest)
 
 		// w.WriteHeader(http.StatusOK)
+
+		// On success, return the PushProviderPayload, for now with nothing of interest
+		pushProvider := payload.PushProvider{SR: []string{}, BK: 0, BB: nil}
+		pushProviderBytes, err := payload.CborEncode(pushProvider)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Write(pushProviderBytes)
 	}
 }
 
@@ -118,114 +185,46 @@ func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("In HTTPRemotePullHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
-		w.WriteHeader(http.StatusOK)
-	}
-}
 
-// HTTPRemoteHandler exposes a CarMirror remote over HTTP by exposing a HTTP handler
-// that interlocks with methods exposed by HTTPClient
-func HTTPRemoteHandler(ds *CarMirror) http.HandlerFunc {
-	// TODO: Add handler for /push and /pull
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
+		// decode the cbor request
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Debugf("could not read body: err=%v", err)
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		// switch r.Method {
-		// case http.MethodPost:
-		// 	createDsyncSession(ds, w, r)
-		// case http.MethodPut:
-		// 	if r.Header.Get("Content-Type") == carMIMEType {
-		// 		if err := ds.ReceiveBlocks(r.Context(), r.FormValue("sid"), r.Body); err != nil {
-		// 			w.WriteHeader(http.StatusBadRequest)
-		// 			w.Write([]byte(err.Error()))
-		// 			return
-		// 		}
-		// 		w.WriteHeader(http.StatusOK)
-		// 		return
-		// 	}
+		var pullRequest payload.PullRequestor
+		if err := payload.CborDecode(data, &pullRequest); err != nil {
+			log.Debugf("could not decode cbor")
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		// 	receiveBlockHTTP(ds, w, r)
-		// case http.MethodGet:
-		// 	mfstID := r.FormValue("manifest")
-		// 	blockID := r.FormValue("block")
-		// 	if mfstID == "" && blockID == "" {
-		// 		w.WriteHeader(http.StatusBadRequest)
-		// 		w.Write([]byte("either manifest or block query params are required"))
-		// 	} else if mfstID != "" {
+		cidStrs := pullRequest.RS
+		cids, err := dag.ParseCids(cidStrs)
+		if err != nil {
+			log.Debugf("could not parse cids: cidStrs=%v", cidStrs)
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		// 		meta := map[string]string{}
-		// 		for key := range r.URL.Query() {
-		// 			if key != "manifest" {
-		// 				meta[key] = r.URL.Query().Get(key)
-		// 			}
-		// 		}
+		// Create a car file from the requested cids
+		var b bytes.Buffer
+		bw := bufio.NewWriter(&b)
 
-		// 		mfst, err := ds.GetDagInfo(r.Context(), mfstID, meta)
-		// 		if err != nil {
-		// 			w.WriteHeader(http.StatusInternalServerError)
-		// 			w.Write([]byte(err.Error()))
-		// 			return
-		// 		}
+		if err := carv1.WriteCar(r.Context(), cm.lng, cids, bw); err != nil {
+			log.Debugf("error while writing car file: err=%v", err.Error())
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		bw.Flush()
 
-		// 		data, err := json.Marshal(mfst)
-		// 		if err != nil {
-		// 			w.WriteHeader(http.StatusInternalServerError)
-		// 			w.Write([]byte(err.Error()))
-		// 			return
-		// 		}
-
-		// 		w.Header().Set("Content-Type", jsonMIMEType)
-		// 		w.Write(data)
-		// 	} else {
-		// 		data, err := ds.GetBlock(r.Context(), blockID)
-		// 		if err != nil {
-		// 			w.WriteHeader(http.StatusInternalServerError)
-		// 			w.Write([]byte(err.Error()))
-		// 			return
-		// 		}
-		// 		w.Header().Set("Content-Type", binaryMIMEType)
-		// 		w.Write(data)
-		// 	}
-		// case http.MethodPatch:
-		// 	meta := map[string]string{}
-		// 	for key := range r.URL.Query() {
-		// 		meta[key] = r.URL.Query().Get(key)
-		// 	}
-
-		// 	info, err := decodeDAGInfoBody(r)
-		// 	if err != nil {
-		// 		w.WriteHeader(http.StatusBadRequest)
-		// 		w.Write([]byte(err.Error()))
-		// 		return
-		// 	}
-		// 	r, err := ds.OpenBlockStream(r.Context(), info, meta)
-		// 	if err != nil {
-		// 		w.WriteHeader(http.StatusBadRequest)
-		// 		w.Write([]byte(err.Error()))
-		// 		return
-		// 	}
-
-		// 	w.Header().Set("Content-Type", carMIMEType)
-		// 	w.WriteHeader(http.StatusOK)
-		// 	defer r.Close()
-		// 	io.Copy(w, r)
-		// 	return
-
-		// case http.MethodDelete:
-		// 	cid := r.FormValue("cid")
-		// 	meta := map[string]string{}
-		// 	for key := range r.URL.Query() {
-		// 		if key != "cid" {
-		// 			meta[key] = r.URL.Query().Get(key)
-		// 		}
-		// 	}
-
-		// 	if err := ds.RemoveCID(r.Context(), cid, meta); err != nil {
-		// 		w.WriteHeader(http.StatusInternalServerError)
-		// 		w.Write([]byte(err.Error()))
-		// 		return
-		// 	}
-
-		// 	w.WriteHeader(http.StatusOK)
-		// }
+		// return the car file
+		w.Write(b.Bytes())
 	}
 }

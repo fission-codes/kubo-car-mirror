@@ -42,6 +42,7 @@ var (
 // or pushable, pullable?
 type CarMirrorable interface {
 	Push(ctx context.Context, cids []cid.Cid) (err error)
+	Pull(ctx context.Context, cids []cid.Cid) (err error)
 	// NewPushSession(cid cid.Cid) (err error)
 	// NewPushSession()
 	// NewPullSession()
@@ -196,18 +197,19 @@ type PullParams struct {
 }
 
 // NewPush creates a push to a remote address
-func (cm *CarMirror) NewPull(cidStr, remoteAddr string, stream bool) (*Pull, error) {
+func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
 	id, err := cid.Parse(cidStr)
 	if err != nil {
 		return nil, err
 	}
+	cids := []cid.Cid{id}
 
 	rem, err := cm.mirrorableRemote(remoteAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewPull(cm.lng, id, rem, stream), nil
+	return NewPull(cm.lng, cids, rem, stream), nil
 }
 
 func NewPushHandler(cm *CarMirror) http.HandlerFunc {
@@ -224,6 +226,8 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
 
 			log.Debugf("Before NewPush")
+			// Need list of cids here, since protocol takes list.
+			// so move getting list of cids to this level
 			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
 			if err != nil {
 				fmt.Printf("error creating push: %s\n", err.Error())
@@ -271,7 +275,7 @@ func NewPullHandler(cm *CarMirror) http.HandlerFunc {
 
 			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Stream)
 
-			pull, err := cm.NewPull(p.Cid, p.Addr, p.Stream)
+			pull, err := cm.NewPull(r.Context(), p.Cid, p.Addr, p.Stream)
 			if err != nil {
 				fmt.Printf("error creating pull: %s\n", err.Error())
 				w.Write([]byte(err.Error()))

@@ -185,8 +185,7 @@ run_pull_test() {
     carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
   "
 
-  # TODO: uncomment
-  # check_has_cid_root 1 $ROOT_CID
+  check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
