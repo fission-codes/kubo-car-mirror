@@ -72,11 +72,9 @@ You can interact with local CAR Mirror APIs using the `carmirror` CLI.
 ./cmd/carmirror pull ...
 ```
 
-During development, you might want to run in a testbed with iptb.  This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
+During development, you might want to run in a testbed with [iptb](https://github.com/ipfs/iptb).  This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
 
 ```
-Run iptb manually
-```shell
 # set up path, functions, etc
 source test/lib/carmirror-lib.sh
 
