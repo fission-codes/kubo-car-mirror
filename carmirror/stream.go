@@ -10,7 +10,7 @@ import (
 	"github.com/ipld/go-car"
 )
 
-func AddAllFromCARReader(ctx context.Context, bapi coreiface.BlockAPI, r io.Reader, progCh chan cid.Cid) (int, error) {
+func AddAllFromCarReader(ctx context.Context, bapi coreiface.BlockAPI, r io.Reader, progCh chan cid.Cid) (int, error) {
 	rdr, err := car.NewCarReader(r)
 	if err != nil {
 		return 0, err

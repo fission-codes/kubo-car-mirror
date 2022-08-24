@@ -60,9 +60,6 @@ Once built, the kubo daemon has the CAR Mirror plugin baked in.
 ```
 # Start kubo daemon
 ../kubo/cmd/ipfs/ipfs daemon
-
-# Or start with debug
-GOLOG_LOG_LEVEL="car-mirror=debug,car-mirror-plugin=debug" ../kubo/cmd/ipfs daemon
 ```
 
 You can interact with local CAR Mirror APIs using the `carmirror` CLI.
@@ -113,6 +110,17 @@ ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/nul
 # shutdown and cleanup
 iptb_stop
 iptb_remove
+```
+
+## Debugging
+
+You can enable debugging in the logs using the `GOLOG_LOG_LEVEL` environment variable.  This can help with running the daemon, the carmirror CLI, verbose sharness tests, or manual operations in a local testbed.
+
+```
+# Turn on debugging
+export GOLOG_LOG_LEVEL="car-mirror=debug,car-mirror-plugin=debug"
+
+# Start daemon, start testbed, run commands, ...
 ```
 
 ## Configuration

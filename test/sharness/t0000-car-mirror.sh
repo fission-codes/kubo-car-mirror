@@ -30,12 +30,12 @@ cm_remote_addr() {
 # TODO: Simplify if config should include http:// as well
 cm_cli_commands_addr() {
   node=$1
-  echo "http:$(cm_commands_addr $node)"
+  echo "http://$(cm_commands_addr $node)"
 }
 
 cm_cli_remote_addr() {
   node=$1
-  echo "http://127.0.0.1$(cm_remote_addr $node)"
+  echo "http://localhost$(cm_remote_addr $node)"
 }
 
 configure_cm_ports() {
@@ -112,6 +112,7 @@ check_has_cid_root() {
 
   test_expect_success "node $node can get cid root $cid" '
     ipfsi $node get $cid --offline >/dev/null 2> get_error
+    cat get_error
     test_should_not_contain "block was not found locally" get_error
   '
 }
@@ -126,6 +127,10 @@ check_not_has_cid_root() {
   '
 }
 
+ROOT_CID=QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+
+# ROOT_CID=QmVQJMFnQ9vqoeF983FyURehB4iktkupfGjAGcvC5ivMNL
+
 run_push_test() {
   startup_cluster_disconnected 2 "$@"
 
@@ -138,15 +143,23 @@ run_push_test() {
     ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
   '
 
-  check_has_cid_root 0 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
-  check_not_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  check_has_cid_root 0 $ROOT_CID
+  check_not_has_cid_root 1 $ROOT_CID
 
-  test_expect_success "can push from node 0 to node 1" '
-    carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
-  '
+  test_expect_success "can push from node 0 to node 1" "
+    carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
+  "
+  
+  iptb logs 0
+  iptb logs 1
 
-  # TODO: uncomment
-  # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  # This is failing because there is a nested CID that is still missing.
+  # It works manually though.  Why?
+  #
+  # 222.77 KiB / 222.77 KiB [==========================================================================================================================================================================================================================================================] 100.00% 0s
+  # Error: block was not found locally (offline): ipld: could not find QmQZDRY5qrE3ABDQAg4yq2PNEZ9F1HqMGhT36Uqg7G8aFV
+  # 'get_error' contains undesired value 'block was not found locally'
+  check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
@@ -165,15 +178,15 @@ run_pull_test() {
     ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
   '
 
-  check_has_cid_root 0 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
-  check_not_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  check_has_cid_root 0 $ROOT_CID
+  check_not_has_cid_root 1 $ROOT_CID
 
-  test_expect_success "can pull from node 0 to node 1" '
-    carmirrori 1 pull QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 0)
-  '
+  test_expect_success "can pull from node 0 to node 1" "
+    carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
+  "
 
   # TODO: uncomment
-  # check_has_cid_root 1 QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
+  # check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop

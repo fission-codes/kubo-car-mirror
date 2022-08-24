@@ -34,12 +34,16 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
 	w := bufio.NewWriter(&b)
 
 	if err := carv1.WriteCar(ctx, rem.NodeGetter, cids, w); err != nil {
+		log.Debugf("error while writing car file: err=%v", err.Error())
 		return err
 	}
 
+	// We must flush the buffer or we could get unexpected EOF errors on the other end
+	w.Flush()
 	pl := payload.PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
 	plBytes, err := payload.CborEncode(pl)
 	if err != nil {
+		log.Debugf("error while encoding payload in cbor: err=%v", err.Error())
 		return err
 	}
 	plReader := bytes.NewReader(plBytes)
@@ -80,7 +84,33 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("In HTTPRemotePushHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
-		w.WriteHeader(http.StatusOK)
+
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Debugf("could not read body: err=%v", err)
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		var pushRequest payload.PushRequestor
+		if err := payload.CborDecode(data, &pushRequest); err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		_, err = AddAllFromCarReader(r.Context(), cm.bapi, bytes.NewReader(pushRequest.PL), nil)
+		if err != nil {
+			// getting unexpected EOF as err here
+			log.Debugf("error in AddAllFromCarReader: err=%v", err.Error())
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// log.Debugf("decoded payload = %v", pushRequest)
+
+		// w.WriteHeader(http.StatusOK)
 	}
 }
 
