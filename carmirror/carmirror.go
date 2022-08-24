@@ -335,7 +335,7 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 		SkipDuplicates: true,
 	})
 	if err != nil {
-		return cids, errors.Wrapf(err, "error traversing DAG: %w", err)
+		return cids, errors.Wrapf(err, "error traversing DAG: %v", err)
 	}
 
 	return cids, nil
