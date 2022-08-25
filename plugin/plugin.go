@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"net/http"
+	"os"
 
 	carmirror "github.com/fission-codes/go-car-mirror/carmirror"
 	golog "github.com/ipfs/go-log"
@@ -12,20 +13,20 @@ import (
 
 var log = golog.Logger("car-mirror")
 
-// Plugins is an exported list of plugins that will be loaded by go-ipfs
+// Plugins is an exported list of plugins that will be loaded by kubo
 var Plugins = []plugin.Plugin{
 	NewCarMirrorPlugin(),
 }
 
-// CarMirrorPlugin is exported struct IPFS will load & work with
+// CarMirrorPlugin is an exported struct IPFS will load & work with
 type CarMirrorPlugin struct {
-	// TODO: might need a config file if we have to write to it, like from allow and deny requests
-	host *carmirror.CarMirror
-	// log level, defaults to "info"
+	host     *carmirror.CarMirror
 	LogLevel string
-	// Address CAR Mirror will listen on for commands. This should be local only
+	// HTTPCommandsAddr is the address CAR Mirror will listen on for local commands, which are application concerns.
+	// Defaults to `127.0.0.1:2502`.
 	HTTPCommandsAddr string
-	// Address CAR Mirror will listen on for performing CAR Mirror
+	// HTTPRemoteAddr is the address CAR Mirror will listen on for remote requests, which are protocol concerns.
+	// Defaults to `:2503`.
 	HTTPRemoteAddr string
 }
 
@@ -33,8 +34,8 @@ type CarMirrorPlugin struct {
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
 		LogLevel:         "info",
-		HTTPRemoteAddr:   ":2503",          // for requests we expose remotely, which are protocol level concerns
-		HTTPCommandsAddr: "127.0.0.1:2502", // for requests we only allow to be initiated locally, which are application level concerns
+		HTTPRemoteAddr:   ":2503",
+		HTTPCommandsAddr: "127.0.0.1:2502",
 	}
 }
 
@@ -46,20 +47,23 @@ func (*CarMirrorPlugin) Name() string {
 }
 
 func (*CarMirrorPlugin) Version() string {
-	return "0.1.0"
+	return carmirror.Version
 }
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
+	log.Debugf("Init")
 	p.loadConfig(env.Config)
-	// I don't like this because it overrides env vars.
-	// golog.SetLogLevel("car-mirror", p.LogLevel)
-	log.Debugf("%s: Init(%v), env.Config = %v\n", p.Name(), env, env.Config)
+
+	// Only set default log level if env var isn't set
+	if lvl := os.Getenv("GOLOG_LOG_LEVEL"); lvl == "" {
+		golog.SetLogLevel("car-mirror", p.LogLevel)
+	}
+
 	return nil
 }
 
 func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
-
-	log.Debugf("%s: Start\n", p.Name())
+	log.Debugf("Start")
 
 	lng, err := carmirror.NewLocalNodeGetter(capi)
 	if err != nil {
@@ -81,12 +85,11 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 	// Start the application level server
 	go p.listenLocalCommands()
 
-	log.Debugf("carmirror plugin started. listening for commands: %s\n", p.HTTPCommandsAddr)
 	return nil
 }
 
 func (p *CarMirrorPlugin) Close() error {
-	log.Debugf("%s: Close\n", p.Name())
+	log.Debugf("Close")
 	return nil
 }
 
@@ -102,7 +105,6 @@ func (p *CarMirrorPlugin) listenLocalCommands() error {
 }
 
 func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {
-	log.Debugf("loadConfig: cfg = %v\n", cfg)
 	if v := getString(cfg, "HTTPRemoteAddr"); v != "" {
 		p.HTTPRemoteAddr = v
 	}

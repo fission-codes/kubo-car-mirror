@@ -48,11 +48,12 @@ cm_cli_remote_addr() {
   echo "http://localhost$(cm_remote_addr $node)"
 }
 
-configure_cm_ports() {
+configure_cm() {
   num_nodes=$1
   for ((node=0; node<$num_nodes; node++)); do
     ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPCommandsAddr "\"$(cm_commands_addr $node)\""
     ipfsi $node config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr "\"$(cm_remote_addr $node)\""
+    ipfsi $node config --json Plugins.Plugins.car-mirror.Config.LogLevel "\"debug\""
   done
 }
 
@@ -66,11 +67,11 @@ carmirrori() {
 
 iptb_new() {
   iptb testbed create -type localipfs -count 2 -force -init
-  configure_cm_ports 2
+  configure_cm 2
 }
 
 iptb_start() {
-  GOLOG_LOG_LEVEL="error,car-mirror=debug" iptb start
+  iptb start
 }
 
 iptb_wait_stop() {
