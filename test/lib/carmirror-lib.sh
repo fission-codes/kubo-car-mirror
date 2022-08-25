@@ -89,6 +89,18 @@ iptb_remove() {
   rm -rf $IPTB_ROOT
 }
 
+iptb_fresh() {
+  iptb_stop
+  iptb_remove
+  iptb_new
+  iptb_start
+}
+
+iptb_nuke() {
+  iptb_stop
+  iptb_remove
+}
+
 iptb_logs() {
   node="$1"
   shift

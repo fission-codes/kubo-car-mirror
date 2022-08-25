@@ -23,31 +23,20 @@ import (
 
 var log = golog.Logger("car-mirror")
 
-func init() {
-	// golog.SetLogLevel("car-mirror", "debug")
-}
-
 const (
-	// TODO: Should this be just a string to ditch the dependency on libp2p?  Only used in HTTP header.
-	// CarMirrorProtocolID = protocol.ID("/car-mirror/0.1.0")
-
-	// CarMirrorProtocolID is the CAR Mirror p2p Protocol Identifier & version tag
 	CarMirrorProtocolID = "/car-mirror/0.1.0"
 )
 
 var (
-	ErrSomething = fmt.Errorf("something")
+	ErrUnknownProtocolVersion = fmt.Errorf("unknown protocol version")
 )
 
 // or pushable, pullable?
 type CarMirrorable interface {
 	Push(ctx context.Context, cids []cid.Cid) (err error)
 	Pull(ctx context.Context, cids []cid.Cid) (err error)
-	// NewPushSession(cid cid.Cid) (err error)
 	// NewPushSession()
 	// NewPullSession()
-	// Pull()
-	// Something with protocol verion? or not needed?
 }
 
 type CarMirror struct {
@@ -63,22 +52,18 @@ type CarMirror struct {
 	// HTTP server accepting CAR Mirror requests
 	httpServer *http.Server
 
-	// bools for various config options?
-
 	// Mutex stuff
 	// Session cache?
 	sessionTTLDur time.Duration
 }
 
-// var (
-// 	// compile-time assertion that CarMirror satisfies the remote interface
-// 	_ CarMirrorable = (*CarMirror)(nil)
-// )
+var (
+// compile-time assertion that CarMirror satisfies the remote interface
+// _ CarMirrorable = (*CarMirror)(nil)
+)
 
-// Config encapsulates optional CAR Mirror configuration
+// Config encapsulates CAR Mirror configuration
 type Config struct {
-	// Provide a listening address to have CarMirror spin up an HTTP server when
-	// StartRemote(ctx) is called
 	HTTPRemoteAddr string
 }
 
@@ -153,10 +138,6 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 	log.Debug("CAR Mirror remote started")
 	return nil
 }
-
-// TODO: Add other methods below
-
-// func (cm *CarMirror) NewPushSession() {}
 
 func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err error) {
 	if strings.HasPrefix(remoteAddr, "http") {
@@ -257,10 +238,6 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 			w.Write(data)
 		}
 	})
-}
-
-func (cm *CarMirror) NewPushSession(cid cid.Cid) error {
-	return nil
 }
 
 func NewPullHandler(cm *CarMirror) http.HandlerFunc {

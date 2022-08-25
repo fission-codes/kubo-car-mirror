@@ -16,6 +16,10 @@ import (
 	carv1 "github.com/ipld/go-car"
 )
 
+var (
+	_ CarMirrorable = (*HTTPClient)(nil)
+)
+
 // HTTPClient is the request side of doing dsync over HTTP
 type HTTPClient struct {
 	URL        string
@@ -130,12 +134,6 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	return nil
 }
 
-// func (rem *HTTPClient) NewPushSession() (PushSession, error) {
-// 	return &httpPushSession{
-// 		rem: rem,
-// 	}, nil
-// }
-
 func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("In HTTPRemotePushHandler")
@@ -164,9 +162,6 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// log.Debugf("decoded payload = %v", pushRequest)
-
-		// w.WriteHeader(http.StatusOK)
 
 		// On success, return the PushProviderPayload, for now with nothing of interest
 		pushProvider := payload.PushProvider{SR: []string{}, BK: 0, BB: nil}
