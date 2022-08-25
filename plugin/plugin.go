@@ -10,7 +10,7 @@ import (
 	plugin "github.com/ipfs/kubo/plugin"
 )
 
-var log = golog.Logger("car-mirror-plugin")
+var log = golog.Logger("car-mirror")
 
 // Plugins is an exported list of plugins that will be loaded by go-ipfs
 var Plugins = []plugin.Plugin{
@@ -52,7 +52,7 @@ func (*CarMirrorPlugin) Version() string {
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 	p.loadConfig(env.Config)
 	// I don't like this because it overrides env vars.
-	// golog.SetLogLevel("car-mirror-plugin", p.LogLevel)
+	// golog.SetLogLevel("car-mirror", p.LogLevel)
 	log.Debugf("%s: Init(%v), env.Config = %v\n", p.Name(), env, env.Config)
 	return nil
 }

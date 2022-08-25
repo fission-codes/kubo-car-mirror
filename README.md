@@ -120,7 +120,7 @@ You can enable debugging in the logs using the `GOLOG_LOG_LEVEL` environment var
 
 ```
 # Turn on debugging
-export GOLOG_LOG_LEVEL="car-mirror=debug,car-mirror-plugin=debug"
+export GOLOG_LOG_LEVEL="error,car-mirror=debug"
 
 # Start daemon, start testbed, run commands, ...
 ```

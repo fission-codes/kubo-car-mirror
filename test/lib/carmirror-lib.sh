@@ -70,7 +70,7 @@ iptb_new() {
 }
 
 iptb_start() {
-  GOLOG_LOG_LEVEL="error,core/server=debug,car-mirror-plugin=debug,car-mirror=debug" iptb start
+  GOLOG_LOG_LEVEL="error,car-mirror=debug" iptb start
 }
 
 iptb_wait_stop() {
