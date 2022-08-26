@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fission-codes/go-car-mirror/dag"
@@ -24,7 +25,8 @@ import (
 var log = golog.Logger("car-mirror")
 
 const (
-	CarMirrorProtocolID = "/car-mirror/0.1.0"
+	CarMirrorProtocolID = "/car-mirror/" + Version
+	sessionIdHeader     = "car-mirror-sid"
 )
 
 var (
@@ -35,8 +37,7 @@ var (
 type CarMirrorable interface {
 	Push(ctx context.Context, cids []cid.Cid) (err error)
 	Pull(ctx context.Context, cids []cid.Cid) (err error)
-	// NewPushSession()
-	// NewPullSession()
+	// NewSession() (id string, err error)
 }
 
 type CarMirror struct {
@@ -52,9 +53,10 @@ type CarMirror struct {
 	// HTTP server accepting CAR Mirror requests
 	httpServer *http.Server
 
-	// Mutex stuff
-	// Session cache?
-	sessionTTLDur time.Duration
+	sessionLock    sync.Mutex
+	sessionPool    map[string]*session
+	sessionCancels map[string]context.CancelFunc
+	sessionTTLDur  time.Duration
 }
 
 var (
@@ -97,6 +99,9 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 		lng:  localNodes,
 		capi: capi,
 		bapi: blockStore,
+
+		sessionPool:    map[string]*session{},
+		sessionCancels: map[string]context.CancelFunc{},
 		// Spec: The Provider MAY garbage collect its session state when it has exhausted its graph, since false positives in the Bloom filter MAY lead to the Provider having an incorrect picture of the Requestor's store. In addition, further requests MAY come in for that session. Session state is an optimization, so treating this as a totally new session is acceptable. However, due to this fact, it is RECOMMENDED that the Provider maintain a session state TTL of at least 30 seconds since the last block is sent. Maintaining this cache for long periods can speed up future requests, so the Provider MAY keep this information around to aid future requests.
 		sessionTTLDur: time.Second * 30,
 	}
@@ -164,6 +169,36 @@ func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, dif
 	return NewPush(cm.lng, cids, rem, stream), nil
 }
 
+func (cm *CarMirror) NewSession() (sid string, err error) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(cm.sessionTTLDur))
+
+	sess, err := newSession(ctx, cm.lng, cm.bapi)
+	if err != nil {
+		cancel()
+		return
+	}
+
+	cm.sessionLock.Lock()
+	defer cm.sessionLock.Unlock()
+	cm.sessionPool[sess.id] = sess
+	cm.sessionCancels[sess.id] = cancel
+
+	return sess.id, nil
+}
+
+func (cm *CarMirror) finalizeMirror(sess *session) error {
+	log.Debug("finalizing mirror session", sess.id)
+
+	defer func() {
+		cm.sessionLock.Lock()
+		cm.sessionCancels[sess.id]()
+		delete(cm.sessionPool, sess.id)
+		cm.sessionLock.Unlock()
+	}()
+
+	return nil
+}
+
 type PushParams struct {
 	Cid    string
 	Addr   string
@@ -206,6 +241,14 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 
 			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
 
+			sid, err := cm.NewSession()
+			if err != nil {
+				log.Debugf("error creating session: %s", err.Error())
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.Header().Set(sessionIdHeader, sid)
+
 			log.Debugf("Before NewPush")
 			// Need list of cids here, since protocol takes list.
 			// so move getting list of cids to this level
@@ -219,7 +262,7 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 
 			log.Debugf("Before push.Do")
 			if err = push.Do(r.Context()); err != nil {
-				log.Debugf("push error: %s\n", err.Error())
+				log.Debugf("push error: %s", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
