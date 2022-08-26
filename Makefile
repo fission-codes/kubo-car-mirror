@@ -2,7 +2,7 @@ TEST_NAME = t0000-car-mirror
 
 .PHONY: test
 
-default: test
+default: all
 
 all: build build-plugin test sharness
 
