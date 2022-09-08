@@ -27,11 +27,18 @@ https://github.com/fission-codes/go-car-mirror`,
 var push = &cobra.Command{
 	Use:   "push",
 	Short: "copy cid from local repo to remote addr",
-	Args:  cobra.MinimumNArgs(2),
+	Args:  cobra.RangeArgs(2, 3),
 	Run: func(cmd *cobra.Command, args []string) {
 		cid := args[0]
 		addr := args[1]
-		endpoint := fmt.Sprintf("/dag/push/new?cid=%s&addr=%s", cid, addr)
+
+		var endpoint string
+		if len(args) == 3 {
+			diff := args[2]
+			endpoint = fmt.Sprintf("/dag/push/new?cid=%s&addr=%s&diff=%s", cid, addr, diff)
+		} else {
+			endpoint = fmt.Sprintf("/dag/push/new?cid=%s&addr=%s", cid, addr)
+		}
 
 		res, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {

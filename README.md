@@ -28,18 +28,18 @@ git clone https://github.com/ipfs/kubo
 # Change to the go-car-mirror directory to run make targets
 cd go-car-mirror
 
-# Build
+# Build everything, including the kubo plugin
 make build
-
-# Build the kubo plugin
-make build-plugin
 ```
 
 ## Testing
 
 ```
-# Run Go tests
+# Run unit and sharness tests
 make test
+
+# Run unit tests
+make test-unit
 
 # Run sharness tests
 make sharness

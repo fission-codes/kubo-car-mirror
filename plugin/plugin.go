@@ -20,8 +20,8 @@ var Plugins = []plugin.Plugin{
 
 // CarMirrorPlugin is an exported struct IPFS will load & work with
 type CarMirrorPlugin struct {
-	host     *carmirror.CarMirror
-	LogLevel string
+	carmirror *carmirror.CarMirror
+	LogLevel  string
 	// HTTPCommandsAddr is the address CAR Mirror will listen on for local commands, which are application concerns.
 	// Defaults to `127.0.0.1:2502`.
 	HTTPCommandsAddr string
@@ -70,7 +70,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 		return err
 	}
 
-	p.host, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
+	p.carmirror, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
 	})
 	if err != nil {
@@ -78,7 +78,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 	}
 
 	// Start the CAR Mirror protocol server
-	if err = p.host.StartRemote(context.Background()); err != nil {
+	if err = p.carmirror.StartRemote(context.Background()); err != nil {
 		return err
 	}
 
@@ -99,8 +99,8 @@ func (p *CarMirrorPlugin) listenLocalCommands() error {
 	// That is an application concern, not protocol, and we've decided to initiate the request
 	// via a request to the endpoints below.  Once a request for a new push or pull session has been received,
 	// the running CAR Mirror server can then handle the protocol level concerns.
-	m.Handle("/dag/push/new", carmirror.NewPushHandler(p.host))
-	m.Handle("/dag/pull/new", carmirror.NewPullHandler(p.host))
+	m.Handle("/dag/push/new", p.carmirror.NewPushSessionHandler())
+	m.Handle("/dag/pull/new", p.carmirror.NewPullSessionHandler())
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 

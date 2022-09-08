@@ -34,7 +34,7 @@ const (
 	cborMIMEType                  = "application/cbor"
 )
 
-func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
+func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, diff string) error {
 	log.Debugf("HTTPClient.Push")
 
 	var b bytes.Buffer
@@ -55,8 +55,13 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
 	}
 	plReader := bytes.NewReader(plBytes)
 
-	url := fmt.Sprintf("%s%s", rem.URL, "/dag/push")
-	req, err := http.NewRequest("POST", url, plReader)
+	var endpoint string
+	if diff != "" {
+		endpoint = fmt.Sprintf("%s/dag/push?diff=%s", rem.URL, diff)
+	} else {
+		endpoint = fmt.Sprintf("%s/dag/push", rem.URL)
+	}
+	req, err := http.NewRequest("POST", endpoint, plReader)
 	req.Header.Set("Content-Type", cborMIMEType)
 	req.Header.Set("Accept", cborMIMEType)
 
@@ -134,8 +139,10 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	return nil
 }
 
-func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO: parse diff param
+		// diff := r.FormValue("diff")
 		log.Debugf("In HTTPRemotePushHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
 
@@ -163,6 +170,12 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 			return
 		}
 
+		// TODO: Use diff to generate a bloom filter to return in the pushProvider payload
+		// Resolve diff
+		// Locally traverse DAG underneath diff and get list of CIDs, adding them to bloom
+		// Also collect list of subgraph roots to return in SR in the payload
+		// (relative to the CIDs in the push? Or in the diff?)  For all CIDs pushed for the entire session or the request?
+
 		// On success, return the PushProviderPayload, for now with nothing of interest
 		pushProvider := payload.PushProvider{SR: []string{}, BK: 0, BB: nil}
 		pushProviderBytes, err := payload.CborEncode(pushProvider)
@@ -173,10 +186,12 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 		}
 
 		w.Write(pushProviderBytes)
+
+		// Complete is 200.  Success is 202.
 	}
 }
 
-func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("In HTTPRemotePullHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
@@ -221,5 +236,7 @@ func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
 
 		// return the car file
 		w.Write(b.Bytes())
+
+		// TODO: Return 404 if unable to find any new CID roots.  Otherwise 200.
 	}
 }

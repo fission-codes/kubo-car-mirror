@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/fission-codes/go-car-mirror/dag"
-	"github.com/ipfs/go-cid"
+	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
 	mdag "github.com/ipfs/go-merkledag"
@@ -35,8 +35,8 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
-	Push(ctx context.Context, cids []cid.Cid) (err error)
-	Pull(ctx context.Context, cids []cid.Cid) (err error)
+	Push(ctx context.Context, cids []gocid.Cid, diff string) (err error)
+	Pull(ctx context.Context, cids []gocid.Cid) (err error)
 	// NewSession() (id string, err error)
 }
 
@@ -108,8 +108,8 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 
 	if cfg.HTTPRemoteAddr != "" {
 		m := http.NewServeMux()
-		m.Handle("/dag/push", HTTPRemotePushHandler(cm))
-		m.Handle("/dag/pull", HTTPRemotePullHandler(cm))
+		m.Handle("/dag/push", cm.HTTPRemotePushHandler())
+		m.Handle("/dag/pull", cm.HTTPRemotePullHandler())
 
 		cm.httpServer = &http.Server{
 			Addr:    cfg.HTTPRemoteAddr,
@@ -166,7 +166,7 @@ func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, dif
 		return nil, errors.Wrapf(err, "unable to get mirrorable remote for addr %v", remoteAddr)
 	}
 
-	return NewPush(cm.lng, cids, rem, stream), nil
+	return NewPush(cm.lng, cids, diff, rem, stream), nil
 }
 
 func (cm *CarMirror) NewSession() (sid string, err error) {
@@ -214,11 +214,11 @@ type PullParams struct {
 
 // NewPush creates a push to a remote address
 func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
-	id, err := cid.Parse(cidStr)
+	id, err := gocid.Parse(cidStr)
 	if err != nil {
 		return nil, err
 	}
-	cids := []cid.Cid{id}
+	cids := []gocid.Cid{id}
 
 	rem, err := cm.mirrorableRemote(remoteAddr)
 	if err != nil {
@@ -228,7 +228,8 @@ func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, str
 	return NewPull(cm.lng, cids, rem, stream), nil
 }
 
-func NewPushHandler(cm *CarMirror) http.HandlerFunc {
+// TODO: Rename to indicate this is really a new push session handler
+func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -249,26 +250,33 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 			}
 			w.Header().Set(sessionIdHeader, sid)
 
-			log.Debugf("Before NewPush")
+			// Would it make sense to treat this like an iterator, looping through requests until there is no more?
+			// NewX
+			// Next
+			// Value
+			// pusher := NewPusher(...)
+			// for pusher.Next() {
+			// 	nextPush := pusher.Value()
+			//  nextPush.Do(...)?
+			// }
+			// Return ...
+
 			// Need list of cids here, since protocol takes list.
 			// so move getting list of cids to this level
+
+			// Create the initial push with the list of cids
+			// We will be widdling this list down
 			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
 			if err != nil {
-				fmt.Printf("error creating push: %s\n", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
-			log.Debugf("After NewPush")
 
-			log.Debugf("Before push.Do")
 			if err = push.Do(r.Context()); err != nil {
 				log.Debugf("push error: %s", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
-			log.Debugf("After push.Do")
-
-			log.Debugf("push complete")
 
 			data, err := json.Marshal(p)
 			if err != nil {
@@ -283,7 +291,7 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 	})
 }
 
-func NewPullHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -323,11 +331,11 @@ func NewPullHandler(cm *CarMirror) http.HandlerFunc {
 	})
 }
 
-// GetLocalCids returns a unique list of `cid.CID`s underneath a given root CID, using an offline CoreAPI.
+// GetLocalCids returns a unique list of `gocid.Cid`s underneath a given root CID, using an offline CoreAPI.
 // The root CID is included in the returned list.
 // In the case of an error, both the discovered CIDs thus far and the error are returned.
-func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid.Cid, error) {
-	var cids []cid.Cid
+func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]gocid.Cid, error) {
+	var cids []gocid.Cid
 	rootCid, err := dag.ParseCid(rootCidStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to parse root cid %s", rootCidStr)
@@ -361,6 +369,6 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid
 	return cids, nil
 }
 
-func (cm *CarMirror) WriteCar(ctx context.Context, cids []cid.Cid, w io.Writer) error {
+func (cm *CarMirror) WriteCar(ctx context.Context, cids []gocid.Cid, w io.Writer) error {
 	return carv1.WriteCar(ctx, cm.lng, cids, w)
 }
