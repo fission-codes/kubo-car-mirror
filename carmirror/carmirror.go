@@ -10,7 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fission-codes/go-car-mirror/bloom"
 	"github.com/fission-codes/go-car-mirror/dag"
+	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
@@ -18,7 +20,8 @@ import (
 	"github.com/ipfs/go-merkledag/traverse"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
-	carv1 "github.com/ipld/go-car"
+	"github.com/ipld/go-car"
+	"github.com/ipld/go-car/util"
 	"github.com/pkg/errors"
 )
 
@@ -35,7 +38,7 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
-	Push(ctx context.Context, cids []gocid.Cid, diff string) (err error)
+	Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error)
 	Pull(ctx context.Context, cids []gocid.Cid) (err error)
 	// NewSession() (id string, err error)
 }
@@ -250,32 +253,28 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			}
 			w.Header().Set(sessionIdHeader, sid)
 
-			// Would it make sense to treat this like an iterator, looping through requests until there is no more?
-			// NewX
-			// Next
-			// Value
-			// pusher := NewPusher(...)
-			// for pusher.Next() {
-			// 	nextPush := pusher.Value()
-			//  nextPush.Do(...)?
-			// }
-			// Return ...
-
-			// Need list of cids here, since protocol takes list.
-			// so move getting list of cids to this level
-
-			// Create the initial push with the list of cids
-			// We will be widdling this list down
-			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
+			remote, err := cm.mirrorableRemote(p.Addr)
 			if err != nil {
+				err = errors.Wrapf(err, "unable to get mirrorable remote for addr %v", p.Addr)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
 
-			if err = push.Do(r.Context()); err != nil {
-				log.Debugf("push error: %s", err.Error())
+			cid, err := dag.ParseCid(p.Cid)
+			if err != nil {
+				err = errors.Wrapf(err, "unable to parse cid %v", p.Cid)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
+			}
+			cids := []gocid.Cid{*cid}
+
+			pusher := NewPusher(r.Context(), cm.lng, cm.capi, cids, p.Diff, p.Stream, remote)
+			for pusher.Next() {
+				pusher.Push()
 			}
 
 			data, err := json.Marshal(p)
@@ -369,6 +368,29 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]goc
 	return cids, nil
 }
 
-func (cm *CarMirror) WriteCar(ctx context.Context, cids []gocid.Cid, w io.Writer) error {
-	return carv1.WriteCar(ctx, cm.lng, cids, w)
+// WriteCar writes the CIDs to the CAR file without adding their links
+func WriteCar(ctx context.Context, ng ipld.NodeGetter, cids []gocid.Cid, w io.Writer) error {
+	h := &car.CarHeader{
+		Roots:   cids, // ignored per spec but filling it in with all cids
+		Version: 1,
+	}
+	if err := car.WriteHeader(h, w); err != nil {
+		return fmt.Errorf("writing car header: %s", err)
+	}
+	seen := cid.NewSet()
+	for _, c := range cids {
+		n, err := ng.Get(ctx, c)
+		if err != nil {
+			return err
+		}
+
+		if !seen.Visit(c) {
+			continue
+		}
+
+		if err := util.LdWrite(w, c.Bytes(), n.RawData()); err != nil {
+			return fmt.Errorf("encoding car block: %s", err)
+		}
+	}
+	return nil
 }
