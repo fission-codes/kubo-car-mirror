@@ -110,7 +110,7 @@ func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, re
 
 	for _, cid := range p.remainingRoots {
 		var rp path.Resolved
-		var obj ipld.Node
+		var nd ipld.Node
 		var lastDepth int
 		lastDepth = 0
 
@@ -121,12 +121,12 @@ func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, re
 		}
 
 		nodeGetter := mdag.NewSession(p.ctx, p.lng)
-		obj, err = nodeGetter.Get(p.ctx, rp.Cid())
+		nd, err = nodeGetter.Get(p.ctx, rp.Cid())
 		if err != nil {
 			err = errors.Wrapf(err, "unable to get nodes for root cid %s", cid.String())
 			return
 		}
-		err = traverse.Traverse(obj, traverse.Options{
+		err = traverse.Traverse(nd, traverse.Options{
 			DAG:   nodeGetter,
 			Order: traverse.BFS, // Breadth first
 			Func: func(current traverse.State) error {
