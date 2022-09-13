@@ -14,7 +14,7 @@ type Pull struct {
 	remote CarMirrorable   // place we're sending to
 }
 
-// NewPush initiates a pull to a remote.
+// NewPull initiates a pull to a remote.
 func NewPull(lng ipld.NodeGetter, cids []cid.Cid, remote CarMirrorable, stream bool) *Pull {
 	pull := &Pull{
 		stream: stream,

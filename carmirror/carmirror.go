@@ -157,21 +157,6 @@ func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err
 	return rem, nil
 }
 
-// NewPush creates a push to a remote address
-func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, diff string, stream bool) (*Push, error) {
-	cids, err := cm.GetLocalCids(ctx, cidStr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get local cids for cid %v", cidStr)
-	}
-
-	rem, err := cm.mirrorableRemote(remoteAddr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get mirrorable remote for addr %v", remoteAddr)
-	}
-
-	return NewPush(cm.lng, cids, diff, rem, stream), nil
-}
-
 func (cm *CarMirror) NewSession() (sid string, err error) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(cm.sessionTTLDur))
 
@@ -215,7 +200,7 @@ type PullParams struct {
 	Stream bool
 }
 
-// NewPush creates a push to a remote address
+// NewPull creates a pull from a remote address
 func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
 	id, err := gocid.Parse(cidStr)
 	if err != nil {
@@ -333,36 +318,41 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 // GetLocalCids returns a unique list of `gocid.Cid`s underneath a given root CID, using an offline CoreAPI.
 // The root CID is included in the returned list.
 // In the case of an error, both the discovered CIDs thus far and the error are returned.
-func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]gocid.Cid, error) {
+func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCids []gocid.Cid) ([]gocid.Cid, error) {
 	var cids []gocid.Cid
-	rootCid, err := dag.ParseCid(rootCidStr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to parse root cid %s", rootCidStr)
-	}
-	cids = append(cids, *rootCid)
+	var cidsSet = gocid.NewSet()
 
-	rp, err := cm.capi.ResolvePath(ctx, path.New(rootCidStr))
-	if err != nil {
-		return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", rootCidStr)
-	}
-
-	nodeGetter := mdag.NewSession(ctx, cm.lng)
-	obj, err := nodeGetter.Get(ctx, rp.Cid())
-	if err != nil {
-		return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", rootCidStr)
-	}
-	err = traverse.Traverse(obj, traverse.Options{
-		DAG:   nodeGetter,
-		Order: traverse.DFSPre,
-		Func: func(current traverse.State) error {
-			cids = append(cids, current.Node.Cid())
-			return nil
-		},
-		ErrFunc:        nil,
-		SkipDuplicates: true,
-	})
-	if err != nil {
-		return cids, errors.Wrapf(err, "error traversing DAG: %v", err)
+	for _, cid := range rootCids {
+		rp, err := cm.capi.ResolvePath(ctx, path.New(cid.String()))
+		if err != nil {
+			continue
+			// return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", cid.String())
+		}
+		nodeGetter := mdag.NewSession(ctx, cm.lng)
+		obj, err := nodeGetter.Get(ctx, rp.Cid())
+		if err != nil {
+			continue
+			// return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", cid.String())
+		}
+		// We confirmed the cid is on this node, so add it to the list
+		if cidsSet.Visit(cid) {
+			cids = append(cids, cid)
+		}
+		err = traverse.Traverse(obj, traverse.Options{
+			DAG:   nodeGetter,
+			Order: traverse.DFSPre,
+			Func: func(current traverse.State) error {
+				if cidsSet.Visit(current.Node.Cid()) {
+					cids = append(cids, current.Node.Cid())
+				}
+				return nil
+			},
+			ErrFunc:        nil,
+			SkipDuplicates: true,
+		})
+		if err != nil {
+			return cids, errors.Wrapf(err, "error traversing DAG: %v", err)
+		}
 	}
 
 	return cids, nil

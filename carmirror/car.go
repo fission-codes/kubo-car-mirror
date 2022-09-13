@@ -11,6 +11,7 @@ import (
 )
 
 func AddAllFromCarReader(ctx context.Context, bapi coreiface.BlockAPI, r io.Reader, progCh chan cid.Cid) (int, []cid.Cid, error) {
+	log.Debugf("AddAllFromCarReader")
 	cids := []cid.Cid{}
 	rdr, err := car.NewCarReader(r)
 	if err != nil {

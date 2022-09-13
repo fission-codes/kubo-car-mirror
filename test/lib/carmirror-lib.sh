@@ -80,6 +80,13 @@ iptb_wait_stop() {
   done
 }
 
+iptb_restart() {
+  iptb_stop
+  iptb_wait_stop
+  iptb_start
+}
+
+
 iptb_stop() {
   iptb stop
 }
@@ -91,6 +98,7 @@ iptb_remove() {
 
 iptb_fresh() {
   iptb_stop
+  iptb_wait_stop
   iptb_remove
   iptb_new
   iptb_start

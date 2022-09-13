@@ -10,6 +10,7 @@ import (
 // Returns `nil, error` if any CID strings fail to parse.
 func ParseCids(cids []string) ([]cid.Cid, error) {
 	var rootCids []cid.Cid
+	rootCidsSet := cid.NewSet()
 
 	// Create a CAR file containing all CIDs
 	for _, rootCid := range cids {
@@ -17,7 +18,9 @@ func ParseCids(cids []string) ([]cid.Cid, error) {
 		if err != nil {
 			return nil, err
 		}
-		rootCids = append(rootCids, *parsedRootCid)
+		if rootCidsSet.Visit(*parsedRootCid) {
+			rootCids = append(rootCids, *parsedRootCid)
+		}
 	}
 
 	return rootCids, nil

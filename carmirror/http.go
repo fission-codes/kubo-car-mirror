@@ -73,25 +73,16 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 	req.Header.Set("Content-Type", cborMIMEType)
 	req.Header.Set("Accept", cborMIMEType)
 
-	log.Debugf("req = %v", req)
 	if err != nil {
 		return
 	}
 
 	res, err := http.DefaultClient.Do(req)
-	log.Debugf("res = %v", res)
 	if err != nil {
 		return
 	}
 	defer res.Body.Close()
 
-	// TODO: handle response that includes providerGraphConfirmation and subgraphRoots
-	// payload = {
-	// 	sr : [* cid], ; Incomplete subgraph roots
-	// 	bk : uint,    ; Bloom filter hash count
-	// 	bb : bytes,   ; Bloom filter Binary
-	// }
-	log.Debugf("before reading all body, err=%v", err)
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if resBytes == nil {
 		return
@@ -102,8 +93,12 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 		return
 	}
 
-	log.Debugf("pushProvider.SR=%v", pushProvider.SR)
 	subgraphRoots, err = dag.ParseCids(pushProvider.SR)
+	if err != nil {
+		return
+	}
+
+	providerGraphConfirmation = bloom.NewFilterFromBloomBytes(uint64(len(pushProvider.BB)*8), uint64(pushProvider.BK), pushProvider.BB)
 	if err != nil {
 		return
 	}
@@ -208,8 +203,22 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 		// Also collect list of subgraph roots to return in SR in the payload
 		// (relative to the CIDs in the push? Or in the diff?)  For all CIDs pushed for the entire session or the request?
 
+		// Start with subgraphRoots
+		var providerGraphConfirmation *bloom.Filter
+		bloomCids, err := cm.GetLocalCids(r.Context(), subgraphRoots)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		n := uint64(len(bloomCids) * 8)
+		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.0001)
+		for _, cid := range bloomCids {
+			providerGraphConfirmation.Add(cid.Bytes())
+		}
+
 		// On success, return the PushProviderPayload, for now with nothing of interest
-		pushProvider := payload.PushProvider{SR: subgraphRootsStr, BK: 0, BB: nil}
+		pushProvider := payload.PushProvider{SR: subgraphRootsStr, BK: uint(providerGraphConfirmation.HashCount()), BB: providerGraphConfirmation.Bytes()}
 		log.Debugf("pushProvider=%v", pushProvider)
 		pushProviderBytes, err := payload.CborEncode(pushProvider)
 		if err != nil {
