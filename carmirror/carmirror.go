@@ -44,6 +44,7 @@ type CarMirrorable interface {
 }
 
 type CarMirror struct {
+	cfg *Config
 	// Local node getter
 	lng ipld.NodeGetter
 
@@ -69,13 +70,23 @@ var (
 
 // Config encapsulates CAR Mirror configuration
 type Config struct {
-	HTTPRemoteAddr string
+	HTTPRemoteAddr       string
+	MaxBlocksPerRound    int64
+	MaxBlocksPerColdCall int64
 }
 
 // Validate confirms the configuration is valid
 func (cfg *Config) Validate() error {
 	if cfg.HTTPRemoteAddr == "" {
 		return fmt.Errorf("HTTPRemoteAddr is required")
+	}
+
+	if cfg.MaxBlocksPerColdCall < 1 {
+		return fmt.Errorf("MaxBlocksPerColdCall must be a positive number")
+	}
+
+	if cfg.MaxBlocksPerRound < 1 {
+		return fmt.Errorf("MaxBlocksPerRound must be a positive number")
 	}
 
 	return nil
@@ -99,6 +110,7 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 	}
 
 	cm := &CarMirror{
+		cfg:  cfg,
 		lng:  localNodes,
 		capi: capi,
 		bapi: blockStore,
@@ -257,7 +269,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			}
 			cids := []gocid.Cid{*cid}
 
-			pusher := NewPusher(r.Context(), cm.lng, cm.capi, cids, p.Diff, p.Stream, remote)
+			pusher := NewPusher(r.Context(), cm.cfg, cm.lng, cm.capi, cids, p.Diff, p.Stream, remote)
 			for pusher.Next() {
 				pusher.Push()
 			}

@@ -27,15 +27,19 @@ type CarMirrorPlugin struct {
 	HTTPCommandsAddr string
 	// HTTPRemoteAddr is the address CAR Mirror will listen on for remote requests, which are protocol concerns.
 	// Defaults to `:2503`.
-	HTTPRemoteAddr string
+	HTTPRemoteAddr       string
+	MaxBlocksPerRound    int64
+	MaxBlocksPerColdCall int64
 }
 
 // NewCarMirrorPlugin creates a CarMirrorPlugin with some sensible defaults
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
-		LogLevel:         "info",
-		HTTPRemoteAddr:   ":2503",
-		HTTPCommandsAddr: "127.0.0.1:2502",
+		LogLevel:             "info",
+		HTTPRemoteAddr:       ":2503",
+		HTTPCommandsAddr:     "127.0.0.1:2502",
+		MaxBlocksPerRound:    100,
+		MaxBlocksPerColdCall: 20,
 	}
 }
 
@@ -72,6 +76,8 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 
 	p.carmirror, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
+		cfg.MaxBlocksPerColdCall = p.MaxBlocksPerColdCall
+		cfg.MaxBlocksPerRound = p.MaxBlocksPerRound
 	})
 	if err != nil {
 		return err
@@ -114,6 +120,12 @@ func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {
 	if v := getString(cfg, "LogLevel"); v != "" {
 		p.LogLevel = v
 	}
+	if v := getInt64(cfg, "MaxBlocksPerColdCall"); v != -1 {
+		p.MaxBlocksPerColdCall = v
+	}
+	if v := getInt64(cfg, "MaxBlocksPerRound"); v != -1 {
+		p.MaxBlocksPerRound = v
+	}
 }
 
 func getString(config interface{}, name string) string {
@@ -131,6 +143,25 @@ func getString(config interface{}, name string) string {
 	value, ok := rawValue.(string)
 	if !ok {
 		return ""
+	}
+	return value
+}
+
+func getInt64(config interface{}, name string) int64 {
+	if config == nil {
+		return -1
+	}
+	mapIface, ok := config.(map[string]interface{})
+	if !ok {
+		return -1
+	}
+	rawValue, ok := mapIface[name]
+	if !ok || rawValue == "" {
+		return -1
+	}
+	value, ok := rawValue.(int64)
+	if !ok {
+		return -1
 	}
 	return value
 }

@@ -13,10 +13,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	defaultNumBlocksPerPush = 50
-)
-
 // Do executes the push, blocking until complete
 // func (push *Push) Do(ctx context.Context) (err error) {
 // 	log.Debugf("initiating push: stream=%v, remote=%v, cids=%v, diff=%v", push.stream, push.remote, push.cids, push.diff)
@@ -41,7 +37,8 @@ type Pusher struct {
 	diff                      string
 	stream                    bool
 	remote                    CarMirrorable
-	numBlocksPerPush          int64
+	maxBlocksPerRound         int64
+	maxBlocksPerColdCall      int64
 	currentRound              int64
 	providerGraphConfirmation *bloom.Filter
 	// cidsSeen hashmap
@@ -57,7 +54,7 @@ type Pusher struct {
 //    return pusher
 // }
 
-func NewPusher(ctx context.Context, lng ipld.NodeGetter, capi coreiface.CoreAPI, cids []gocid.Cid, diff string, stream bool, remote CarMirrorable) *Pusher {
+func NewPusher(ctx context.Context, cfg *Config, lng ipld.NodeGetter, capi coreiface.CoreAPI, cids []gocid.Cid, diff string, stream bool, remote CarMirrorable) *Pusher {
 	pusher := &Pusher{
 		ctx:                       ctx,
 		lng:                       lng,
@@ -67,7 +64,8 @@ func NewPusher(ctx context.Context, lng ipld.NodeGetter, capi coreiface.CoreAPI,
 		stream:                    stream,
 		remote:                    remote,
 		currentRound:              0,
-		numBlocksPerPush:          defaultNumBlocksPerPush,
+		maxBlocksPerRound:         cfg.MaxBlocksPerRound,
+		maxBlocksPerColdCall:      cfg.MaxBlocksPerColdCall,
 		providerGraphConfirmation: nil,
 	}
 	return pusher
@@ -102,11 +100,17 @@ func (p *Pusher) Next() bool {
 }
 
 // NextCids returns the next grouping of CIDs to push, remaining CIDs that aren't getting pushed, and remaining CID roots that encompass all remaining CIDs to push.
-// These lists of CIDs are created based on the value of numBlocksPerPush.
+// These lists of CIDs are created based on the value of maxBlocksPerRound.
 func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, remainingRoots []gocid.Cid, err error) {
 	pushCidsSet := gocid.NewSet()
 	remainingCidsSet := gocid.NewSet()
 	remainingRootsSet := gocid.NewSet()
+	var maxBlocks uint64
+	if p.currentRound == 0 {
+		maxBlocks = uint64(p.maxBlocksPerColdCall)
+	} else {
+		maxBlocks = uint64(p.maxBlocksPerRound)
+	}
 
 	for _, cid := range p.remainingRoots {
 		var rp path.Resolved
@@ -133,7 +137,7 @@ func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, re
 			Func: func(current traverse.State) error {
 				// Never nil in current implementation.  Just empty list of bytes.
 				if p.providerGraphConfirmation == nil || len(p.providerGraphConfirmation.Bytes()) == 0 || !p.providerGraphConfirmation.Test(current.Node.Cid().Bytes()) {
-					if len(pushCids) < int(p.numBlocksPerPush) {
+					if len(pushCids) < int(maxBlocks) {
 						if pushCidsSet.Visit(current.Node.Cid()) {
 							pushCids = append(pushCids, current.Node.Cid())
 						}
