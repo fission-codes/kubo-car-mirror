@@ -13,27 +13,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Do executes the push, blocking until complete
-// func (push *Push) Do(ctx context.Context) (err error) {
-// 	log.Debugf("initiating push: stream=%v, remote=%v, cids=%v, diff=%v", push.stream, push.remote, push.cids, push.diff)
-
-// 	// Create new push session, save session id on the push, then call push.remote.Push
-// 	// push.sid, push.diff, err = push.remote.NewReceiveSession(push.info, push.pinOnComplete, push.meta)
-
-// 	// dsync creates a bunch of senders that have sid and send data.  They receive blocks and track with sid.
-// 	// we need to track blocks / cids by sid for ttl purposes
-// 	// we need to update ttl with last block received for sid
-// 	// we need to use caches tied to sessions as well
-// 	// or do caches need to be unique to a session?  maybe some sid specific, some global?
-
-// 	return push.remote.Push(ctx, push.cids, push.diff)
-// }
-
 type Pusher struct {
 	ctx                       context.Context
 	lng                       ipld.NodeGetter
 	capi                      coreiface.CoreAPI
 	remainingRoots            []gocid.Cid
+	cleanupCids               []gocid.Cid
+	subgraphRoots             []gocid.Cid
 	diff                      string
 	stream                    bool
 	remote                    CarMirrorable
@@ -44,15 +30,6 @@ type Pusher struct {
 	// cidsSeen hashmap
 	// remoteBloom
 }
-
-// type PusherOption func(p *Pusher)
-// func NewPusher(opts ...PusherOption) *Pusher {
-//    pusher :=  &Pusher{}
-//    for _, opt := range opts {
-//       opt(pusher)
-//    }
-//    return pusher
-// }
 
 func NewPusher(ctx context.Context, cfg *Config, lng ipld.NodeGetter, capi coreiface.CoreAPI, cids []gocid.Cid, diff string, stream bool, remote CarMirrorable) *Pusher {
 	pusher := &Pusher{
@@ -71,40 +48,23 @@ func NewPusher(ctx context.Context, cfg *Config, lng ipld.NodeGetter, capi corei
 	return pusher
 }
 
+// Next returns true if there are any CIDs left to push.
 func (p *Pusher) Next() bool {
-	log.Debugf("p.remainingRoots=%v", p.remainingRoots)
-	log.Debugf("p.providerGraphConfirmation=%v", p.providerGraphConfirmation)
-
-	for _, cid := range p.remainingRoots {
-		if p.providerGraphConfirmation == nil {
-			log.Debugf("p.providerGraphConfirmation is nil")
-			log.Debugf("Next returning true")
-			return true
-		}
-		if len(p.providerGraphConfirmation.Bytes()) == 0 {
-			log.Debugf("p.providerGraphConfirmation is size 0")
-			log.Debugf("Next returning true")
-			return true
-		}
-		if !p.providerGraphConfirmation.Test(cid.Bytes()) {
-			log.Debugf("CID %v not found in p.providerGraphConfirmation", cid.String())
-			log.Debugf("Next returning true")
-			return true
-		} else {
-			log.Debugf("CID %v found in p.providerGraphConfirmation", cid.String())
-		}
-	}
-
-	log.Debugf("Next returning false")
-	return false
+	return len(p.remainingRoots)+len(p.cleanupCids) > 0
 }
 
-// NextCids returns the next grouping of CIDs to push, remaining CIDs that aren't getting pushed, and remaining CID roots that encompass all remaining CIDs to push.
-// These lists of CIDs are created based on the value of maxBlocksPerRound.
-func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, remainingRoots []gocid.Cid, err error) {
+// Split the list of root CIDs into CIDs we will push next, remaining CIDs for adding to bloom filters, and remaining root CIDs for future pushes, and lastly the CIDs that aren't found locally.
+// The list of CIDs to push next will always include root CIDs ignoring bloom filters, and then CIDs under those roots CIDs based on bloom filter tests.
+// This ensures that we always have root CIDs that encompass all roots we intend to push, so that the returned subgraph roots will always cover all remaining roots.
+func (p *Pusher) NextCids(rootCids []gocid.Cid) (pushCids []gocid.Cid, remainingCids []gocid.Cid, remainingRoots []gocid.Cid, notFoundPushCids []gocid.Cid) {
+	rootCidsSet := gocid.NewSet()
+	for _, cid := range rootCids {
+		rootCidsSet.Add(cid)
+	}
 	pushCidsSet := gocid.NewSet()
 	remainingCidsSet := gocid.NewSet()
 	remainingRootsSet := gocid.NewSet()
+
 	var maxBlocks uint64
 	if p.currentRound == 0 {
 		maxBlocks = uint64(p.maxBlocksPerColdCall)
@@ -112,31 +72,33 @@ func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, re
 		maxBlocks = uint64(p.maxBlocksPerRound)
 	}
 
-	for _, cid := range p.remainingRoots {
+	for _, cid := range rootCids {
 		var rp path.Resolved
 		var nd ipld.Node
 		var lastDepth int
 		lastDepth = 0
 
-		rp, err = p.capi.ResolvePath(p.ctx, path.New(cid.String()))
+		rp, err := p.capi.ResolvePath(p.ctx, path.New(cid.String()))
 		if err != nil {
-			err = errors.Wrapf(err, "unable to resolve path for root cid %s", cid.String())
-			return
+			notFoundPushCids = append(notFoundPushCids, cid)
+			log.Debugf("unable to resolve path for root cid %s.  Adding to notFoundPushCids.  err=%v", cid.String(), err)
+			continue
 		}
 
 		nodeGetter := mdag.NewSession(p.ctx, p.lng)
 		nd, err = nodeGetter.Get(p.ctx, rp.Cid())
 		if err != nil {
-			err = errors.Wrapf(err, "unable to get nodes for root cid %s", cid.String())
-			return
+			notFoundPushCids = append(notFoundPushCids, cid)
+			log.Debugf("unable to get nodes for root cid %s.  Adding to notFoundPushCids.  err=%v", cid.String(), err)
+			continue
 		}
 
 		err = traverse.Traverse(nd, traverse.Options{
 			DAG:   nodeGetter,
 			Order: traverse.BFS, // Breadth first
 			Func: func(current traverse.State) error {
-				// Never nil in current implementation.  Just empty list of bytes.
-				if p.providerGraphConfirmation == nil || len(p.providerGraphConfirmation.Bytes()) == 0 || !p.providerGraphConfirmation.Test(current.Node.Cid().Bytes()) {
+				// Always push root CIDs, or all CIDs if no bloom was provided.  Otherwise only push if CID isn't in bloom.
+				if rootCidsSet.Has(cid) || len(p.providerGraphConfirmation.Bytes()) == 0 || !p.providerGraphConfirmation.Test(current.Node.Cid().Bytes()) {
 					if len(pushCids) < int(maxBlocks) {
 						if pushCidsSet.Visit(current.Node.Cid()) {
 							pushCids = append(pushCids, current.Node.Cid())
@@ -160,50 +122,94 @@ func (p *Pusher) NextCids() (pushCids []gocid.Cid, remainingCids []gocid.Cid, re
 			SkipDuplicates: true,
 		})
 		if err != nil {
-			err = errors.Wrapf(err, "error traversing DAG: %v", err)
-			return
+			notFoundPushCids = append(notFoundPushCids, cid)
+			log.Debugf("error traversing DAG.  Adding to notFoundPushCids.  err=%v", err)
+			continue
 		}
 	}
+
+	// TODO: If we still don't have our limit of blocks, should we include some cleanup CIDs as well, if present?
 
 	return
 }
 
-// Do executes the push, blocking until complete
+// ShouldCleanup returns true if there are straggler CIDs to cleanup and no more root CIDs to push.
+func (p *Pusher) ShouldCleanup() bool {
+	return len(p.remainingRoots) == 0 && len(p.cleanupCids) > 0
+}
+
+// Cleanup pushes the collected cleanupCids without the use of bloom filters.
+func (p *Pusher) Cleanup() (err error) {
+	log.Debugf("Pusher.Cleanup")
+	pushCids, err := p.DoPush(p.cleanupCids, false)
+	if err != nil {
+		return err
+	}
+
+	// Remove pushed cids from cleanupCids
+	var newCleanupCids []gocid.Cid
+	cleanupCidsSet := gocid.NewSet()
+	for _, cid := range p.cleanupCids {
+		cleanupCidsSet.Add(cid)
+	}
+	for _, cid := range pushCids {
+		if !cleanupCidsSet.Has(cid) {
+			newCleanupCids = append(newCleanupCids, cid)
+		}
+	}
+	p.cleanupCids = newCleanupCids
+
+	return nil
+}
+
 func (p *Pusher) Push() (err error) {
+	_, err = p.DoPush(p.remainingRoots, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Push executes the push, blocking until complete
+func (p *Pusher) DoPush(remainingRoots []gocid.Cid, includeBloom bool) (pushCids []gocid.Cid, err error) {
 	// On a partial cold call, the Provider Graph Estimate MUST contain the entire graph minus CIDs in the initial payload. The Provider MUST respond with a Bloom filter of all CIDs that match the Provider Graph Estimate, which is called the Provider Graph Confirmation. On subsequent rounds, the Provider Graph Estimate continues to be refined until is is empty or the entire graph has been synchronized.
 	log.Debugf("Pusher.Push")
 
-	pushCids, remainingCids, remainingRoots, err := p.NextCids()
+	pushCids, remainingCids, remainingRoots, _ := p.NextCids(remainingRoots)
 	if err != nil {
-		return errors.Wrapf(err, "unable to get next CIDs")
+		return nil, errors.Wrapf(err, "unable to get next CIDs")
 	}
 	log.Debugf("pushCids=%v", pushCids)
 	log.Debugf("remainingCids=%v", remainingCids)
 	log.Debugf("remainingRoots=%v", remainingRoots)
 
 	var providerGraphEstimate *bloom.Filter
-	if p.currentRound == 0 {
-		// Cold start.  Create bloom of remainingCids for payload
-		n := uint64(len(remainingCids))
-		providerGraphEstimate = bloom.NewFilterWithEstimates(n, 0.0001)
-		for _, cid := range remainingCids {
-			providerGraphEstimate.Add(cid.Bytes())
+	if includeBloom {
+		if p.currentRound == 0 {
+			// Cold start.  Create bloom of remainingCids for payload
+			// TODO: If we have all cids locally underneath the root and if we don't have a diff param, no bloom is needed.
+			n := uint64(len(remainingCids))
+			providerGraphEstimate = bloom.NewFilterWithEstimates(n, 0.0001)
+			for _, cid := range remainingCids {
+				providerGraphEstimate.Add(cid.Bytes())
+			}
+			log.Debugf("Cold start.  Building providerGraphEstimate from all CIDs.")
+		} else if p.providerGraphConfirmation != nil {
+			// TODO: If we don't update it elsewhere, make sure the providerGraphEstimate is a bloom that combines all returned confirmations into a new bloom with all of their adds.
+			log.Debugf("round > 0 and providerGraphConfirmation not nil, setting providerGraphEstimate to providerGraphConfirmation")
+			providerGraphEstimate = p.providerGraphConfirmation
+		} else {
+			log.Debugf("p.providerGraphConfirmation is nil, so not setting providerGraphEstimate")
 		}
-		log.Debugf("Cold start.  Building providerGraphEstimate from all CIDs.")
-	} else if p.providerGraphConfirmation != nil {
-		// TODO: update this
-		log.Debugf("round > 0 and providerGraphConfirmation not nil, setting providerGraphEstimate to providerGraphConfirmation")
-		providerGraphEstimate = p.providerGraphConfirmation
-	} else {
-		log.Debugf("p.providerGraphConfirmation is nil, so not setting providerGraphEstimate")
 	}
 
 	// Send payload to provider, with provider returning providerGraphConfirmation bloom and SR
 	// TODO: Probably need status of response too
 	providerGraphConfirmation, subgraphRoots, err := p.remote.Push(p.ctx, pushCids, providerGraphEstimate, p.diff)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	// TODO: Combine previous bloom with new bloom, resizing if necessary.
 	p.providerGraphConfirmation = providerGraphConfirmation
 
 	// Set p.remainingCids to remainingRoots + SR
@@ -219,9 +225,7 @@ func (p *Pusher) Push() (err error) {
 	}
 	p.remainingRoots = remainingRoots
 
-	// Return nil if no error
-
 	p.currentRound += 1
 
-	return nil
+	return pushCids, nil
 }

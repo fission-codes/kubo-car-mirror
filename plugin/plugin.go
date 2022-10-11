@@ -20,7 +20,9 @@ var Plugins = []plugin.Plugin{
 
 // CarMirrorPlugin is an exported struct IPFS will load & work with
 type CarMirrorPlugin struct {
+	// A CarMirror struct
 	carmirror *carmirror.CarMirror
+	// Log level
 	LogLevel  string
 	// HTTPCommandsAddr is the address CAR Mirror will listen on for local commands, which are application concerns.
 	// Defaults to `127.0.0.1:2502`.
