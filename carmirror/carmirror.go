@@ -282,27 +282,6 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				} else {
 					pusher.Push()
 				}
-
-				// Select
-				//   Select means decide which CIDs we intend to push, referenced by root or roots.
-				//   If this is just the list of roots, then this will be simple.
-				//   Maybe a separate function is valuable for cases where we may have prior knowledge to use in this initial selection.
-				//
-				// Narrow
-				//   This is where we convert root CIDs into the CIDs we're sending.
-				//   If first round, select maxBlocksPerColdCall CIDs.
-				//   Else, select maxBlocksPerRound CIDs.
-				//   Root CIDs always send.  Other CIDs only add if not in bloom filter or our cache of what we've already sent to them.
-				//   If CID is in cleanupCids, remove it from cleanupCids.
-				// Transmit
-				//   Maybe this is construction of CAR and transmission of entire payload.
-				//   If streaming, same thing but in streaming manner.
-				// Graph Status
-				//   Get subgraph roots back.
-				//   Update remainingCids with previous remainingCids and returned subgraph roots.
-				//   Returned CIDs that were pushed are added to cleanupCids.
-				//
-				// Cleanup
 			}
 
 			data, err := json.Marshal(p)
