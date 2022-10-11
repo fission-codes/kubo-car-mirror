@@ -7,50 +7,50 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/fission-codes/go-car-mirror/bloom"
 	"github.com/fission-codes/go-car-mirror/dag"
 	"github.com/ipfs/go-cid"
+	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
 	mdag "github.com/ipfs/go-merkledag"
 	"github.com/ipfs/go-merkledag/traverse"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
-	carv1 "github.com/ipld/go-car"
+	"github.com/ipld/go-car"
+	"github.com/ipld/go-car/util"
 	"github.com/pkg/errors"
 )
 
 var log = golog.Logger("car-mirror")
 
-func init() {
-	// golog.SetLogLevel("car-mirror", "debug")
-}
-
 const (
-	// TODO: Should this be just a string to ditch the dependency on libp2p?  Only used in HTTP header.
-	// CarMirrorProtocolID = protocol.ID("/car-mirror/0.1.0")
-
-	// CarMirrorProtocolID is the CAR Mirror p2p Protocol Identifier & version tag
-	CarMirrorProtocolID = "/car-mirror/0.1.0"
+	CarMirrorProtocolID = "/car-mirror/" + Version
+	sessionIdHeader     = "car-mirror-sid"
 )
 
 var (
-	ErrSomething = fmt.Errorf("something")
+	ErrUnknownProtocolVersion = fmt.Errorf("unknown protocol version")
 )
 
 // or pushable, pullable?
 type CarMirrorable interface {
-	Push(ctx context.Context, cids []cid.Cid) (err error)
-	Pull(ctx context.Context, cids []cid.Cid) (err error)
-	// NewPushSession(cid cid.Cid) (err error)
-	// NewPushSession()
-	// NewPullSession()
-	// Pull()
-	// Something with protocol verion? or not needed?
+	Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error)
+	Pull(ctx context.Context, cids []gocid.Cid) (err error)
+	// NewSession() (id string, err error)
+	// New
+	// Select
+	// Narrow
+	// Transmit (or Mirror)
+	// GraphStatus
+	// Cleanup
 }
 
 type CarMirror struct {
+	cfg *Config
 	// Local node getter
 	lng ipld.NodeGetter
 
@@ -63,29 +63,36 @@ type CarMirror struct {
 	// HTTP server accepting CAR Mirror requests
 	httpServer *http.Server
 
-	// bools for various config options?
-
-	// Mutex stuff
-	// Session cache?
-	sessionTTLDur time.Duration
+	sessionLock    sync.Mutex
+	sessionPool    map[string]*session
+	sessionCancels map[string]context.CancelFunc
+	sessionTTLDur  time.Duration
 }
 
-// var (
-// 	// compile-time assertion that CarMirror satisfies the remote interface
-// 	_ CarMirrorable = (*CarMirror)(nil)
-// )
+var (
+// compile-time assertion that CarMirror satisfies the remote interface
+// _ CarMirrorable = (*CarMirror)(nil)
+)
 
-// Config encapsulates optional CAR Mirror configuration
+// Config encapsulates CAR Mirror configuration
 type Config struct {
-	// Provide a listening address to have CarMirror spin up an HTTP server when
-	// StartRemote(ctx) is called
-	HTTPRemoteAddr string
+	HTTPRemoteAddr       string
+	MaxBlocksPerRound    int64
+	MaxBlocksPerColdCall int64
 }
 
 // Validate confirms the configuration is valid
 func (cfg *Config) Validate() error {
 	if cfg.HTTPRemoteAddr == "" {
 		return fmt.Errorf("HTTPRemoteAddr is required")
+	}
+
+	if cfg.MaxBlocksPerColdCall < 1 {
+		return fmt.Errorf("MaxBlocksPerColdCall must be a positive number")
+	}
+
+	if cfg.MaxBlocksPerRound < 1 {
+		return fmt.Errorf("MaxBlocksPerRound must be a positive number")
 	}
 
 	return nil
@@ -109,17 +116,21 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 	}
 
 	cm := &CarMirror{
+		cfg:  cfg,
 		lng:  localNodes,
 		capi: capi,
 		bapi: blockStore,
+
+		sessionPool:    map[string]*session{},
+		sessionCancels: map[string]context.CancelFunc{},
 		// Spec: The Provider MAY garbage collect its session state when it has exhausted its graph, since false positives in the Bloom filter MAY lead to the Provider having an incorrect picture of the Requestor's store. In addition, further requests MAY come in for that session. Session state is an optimization, so treating this as a totally new session is acceptable. However, due to this fact, it is RECOMMENDED that the Provider maintain a session state TTL of at least 30 seconds since the last block is sent. Maintaining this cache for long periods can speed up future requests, so the Provider MAY keep this information around to aid future requests.
 		sessionTTLDur: time.Second * 30,
 	}
 
 	if cfg.HTTPRemoteAddr != "" {
 		m := http.NewServeMux()
-		m.Handle("/dag/push", HTTPRemotePushHandler(cm))
-		m.Handle("/dag/pull", HTTPRemotePullHandler(cm))
+		m.Handle("/dag/push", cm.HTTPRemotePushHandler())
+		m.Handle("/dag/pull", cm.HTTPRemotePullHandler())
 
 		cm.httpServer = &http.Server{
 			Addr:    cfg.HTTPRemoteAddr,
@@ -154,10 +165,6 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 	return nil
 }
 
-// TODO: Add other methods below
-
-// func (cm *CarMirror) NewPushSession() {}
-
 func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err error) {
 	if strings.HasPrefix(remoteAddr, "http") {
 		rem = &HTTPClient{URL: remoteAddr, NodeGetter: cm.lng, BlockAPI: cm.bapi}
@@ -168,19 +175,34 @@ func (cm *CarMirror) mirrorableRemote(remoteAddr string) (rem CarMirrorable, err
 	return rem, nil
 }
 
-// NewPush creates a push to a remote address
-func (cm *CarMirror) NewPush(ctx context.Context, cidStr, remoteAddr string, diff string, stream bool) (*Push, error) {
-	cids, err := cm.GetLocalCids(ctx, cidStr)
+func (cm *CarMirror) NewSession() (sid string, err error) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(cm.sessionTTLDur))
+
+	sess, err := newSession(ctx, cm.lng, cm.bapi)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get local cids for cid %v", cidStr)
+		cancel()
+		return
 	}
 
-	rem, err := cm.mirrorableRemote(remoteAddr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get mirrorable remote for addr %v", remoteAddr)
-	}
+	cm.sessionLock.Lock()
+	defer cm.sessionLock.Unlock()
+	cm.sessionPool[sess.id] = sess
+	cm.sessionCancels[sess.id] = cancel
 
-	return NewPush(cm.lng, cids, rem, stream), nil
+	return sess.id, nil
+}
+
+func (cm *CarMirror) finalizeMirror(sess *session) error {
+	log.Debug("finalizing mirror session", sess.id)
+
+	defer func() {
+		cm.sessionLock.Lock()
+		cm.sessionCancels[sess.id]()
+		delete(cm.sessionPool, sess.id)
+		cm.sessionLock.Unlock()
+	}()
+
+	return nil
 }
 
 type PushParams struct {
@@ -196,13 +218,13 @@ type PullParams struct {
 	Stream bool
 }
 
-// NewPush creates a push to a remote address
+// NewPull creates a pull from a remote address
 func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
-	id, err := cid.Parse(cidStr)
+	id, err := gocid.Parse(cidStr)
 	if err != nil {
 		return nil, err
 	}
-	cids := []cid.Cid{id}
+	cids := []gocid.Cid{id}
 
 	rem, err := cm.mirrorableRemote(remoteAddr)
 	if err != nil {
@@ -212,7 +234,8 @@ func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, str
 	return NewPull(cm.lng, cids, rem, stream), nil
 }
 
-func NewPushHandler(cm *CarMirror) http.HandlerFunc {
+// TODO: Rename to indicate this is really a new push session handler
+func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -225,26 +248,41 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 
 			log.Infof("performing push:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
 
-			log.Debugf("Before NewPush")
-			// Need list of cids here, since protocol takes list.
-			// so move getting list of cids to this level
-			push, err := cm.NewPush(r.Context(), p.Cid, p.Addr, p.Diff, p.Stream)
+			sid, err := cm.NewSession()
 			if err != nil {
-				fmt.Printf("error creating push: %s\n", err.Error())
+				log.Debugf("error creating session: %s", err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
-			log.Debugf("After NewPush")
+			w.Header().Set(sessionIdHeader, sid)
 
-			log.Debugf("Before push.Do")
-			if err = push.Do(r.Context()); err != nil {
-				log.Debugf("push error: %s\n", err.Error())
+			remote, err := cm.mirrorableRemote(p.Addr)
+			if err != nil {
+				err = errors.Wrapf(err, "unable to get mirrorable remote for addr %v", p.Addr)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
-			log.Debugf("After push.Do")
 
-			log.Debugf("push complete")
+			cid, err := dag.ParseCid(p.Cid)
+			if err != nil {
+				err = errors.Wrapf(err, "unable to parse cid %v", p.Cid)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			cids := []gocid.Cid{*cid}
+
+			pusher := NewPusher(r.Context(), cm.cfg, cm.lng, cm.capi, cids, p.Diff, p.Stream, remote)
+			for pusher.Next() {
+				if pusher.ShouldCleanup() {
+					pusher.Cleanup()
+				} else {
+					pusher.Push()
+				}
+			}
 
 			data, err := json.Marshal(p)
 			if err != nil {
@@ -259,11 +297,7 @@ func NewPushHandler(cm *CarMirror) http.HandlerFunc {
 	})
 }
 
-func (cm *CarMirror) NewPushSession(cid cid.Cid) error {
-	return nil
-}
-
-func NewPullHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -303,44 +337,74 @@ func NewPullHandler(cm *CarMirror) http.HandlerFunc {
 	})
 }
 
-// GetLocalCids returns a unique list of `cid.CID`s underneath a given root CID, using an offline CoreAPI.
+// GetLocalCids returns a unique list of `gocid.Cid`s underneath a given root CID, using an offline CoreAPI.
 // The root CID is included in the returned list.
 // In the case of an error, both the discovered CIDs thus far and the error are returned.
-func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCidStr string) ([]cid.Cid, error) {
-	var cids []cid.Cid
-	rootCid, err := dag.ParseCid(rootCidStr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to parse root cid %s", rootCidStr)
-	}
-	cids = append(cids, *rootCid)
+func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCids []gocid.Cid) ([]gocid.Cid, error) {
+	cids := make([]gocid.Cid, len(rootCids))
+	var cidsSet = gocid.NewSet()
 
-	rp, err := cm.capi.ResolvePath(ctx, path.New(rootCidStr))
-	if err != nil {
-		return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", rootCidStr)
-	}
-
-	nodeGetter := mdag.NewSession(ctx, cm.lng)
-	obj, err := nodeGetter.Get(ctx, rp.Cid())
-	if err != nil {
-		return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", rootCidStr)
-	}
-	err = traverse.Traverse(obj, traverse.Options{
-		DAG:   nodeGetter,
-		Order: traverse.DFSPre,
-		Func: func(current traverse.State) error {
-			cids = append(cids, current.Node.Cid())
-			return nil
-		},
-		ErrFunc:        nil,
-		SkipDuplicates: true,
-	})
-	if err != nil {
-		return cids, errors.Wrapf(err, "error traversing DAG: %v", err)
+	i := 0
+	for _, cid := range rootCids {
+		rp, err := cm.capi.ResolvePath(ctx, path.New(cid.String()))
+		if err != nil {
+			continue
+			// return cids, errors.Wrapf(err, "unable to resolve path for root cid %s", cid.String())
+		}
+		nodeGetter := mdag.NewSession(ctx, cm.lng)
+		obj, err := nodeGetter.Get(ctx, rp.Cid())
+		if err != nil {
+			continue
+			// return cids, errors.Wrapf(err, "unable to get nodes for root cid %s", cid.String())
+		}
+		// We confirmed the cid is on this node, so add it to the list
+		if cidsSet.Visit(cid) {
+			cids[i] = cid
+			i += 1
+		}
+		err = traverse.Traverse(obj, traverse.Options{
+			DAG:   nodeGetter,
+			Order: traverse.DFSPre,
+			Func: func(current traverse.State) error {
+				if cidsSet.Visit(current.Node.Cid()) {
+					cids = append(cids, current.Node.Cid())
+				}
+				return nil
+			},
+			ErrFunc:        nil,
+			SkipDuplicates: true,
+		})
+		if err != nil {
+			return cids, errors.Wrapf(err, "error traversing DAG: %v", err)
+		}
 	}
 
 	return cids, nil
 }
 
-func (cm *CarMirror) WriteCar(ctx context.Context, cids []cid.Cid, w io.Writer) error {
-	return carv1.WriteCar(ctx, cm.lng, cids, w)
+// WriteCar writes the CIDs to the CAR file without adding their links
+func WriteCar(ctx context.Context, ng ipld.NodeGetter, cids []gocid.Cid, w io.Writer) error {
+	h := &car.CarHeader{
+		Roots:   cids, // ignored per spec but filling it in with all cids
+		Version: 1,
+	}
+	if err := car.WriteHeader(h, w); err != nil {
+		return fmt.Errorf("writing car header: %s", err)
+	}
+	seen := cid.NewSet()
+	for _, c := range cids {
+		n, err := ng.Get(ctx, c)
+		if err != nil {
+			return err
+		}
+
+		if !seen.Visit(c) {
+			continue
+		}
+
+		if err := util.LdWrite(w, c.Bytes(), n.RawData()); err != nil {
+			return fmt.Errorf("encoding car block: %s", err)
+		}
+	}
+	return nil
 }

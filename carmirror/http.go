@@ -8,12 +8,17 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/fission-codes/go-car-mirror/bloom"
 	"github.com/fission-codes/go-car-mirror/dag"
 	"github.com/fission-codes/go-car-mirror/payload"
 	"github.com/ipfs/go-cid"
+	gocid "github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
-	carv1 "github.com/ipld/go-car"
+)
+
+var (
+	_ CarMirrorable = (*HTTPClient)(nil)
 )
 
 // HTTPClient is the request side of doing dsync over HTTP
@@ -30,55 +35,75 @@ const (
 	cborMIMEType                  = "application/cbor"
 )
 
-func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid) error {
+func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEstimate *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error) {
 	log.Debugf("HTTPClient.Push")
 
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
 
-	if err := carv1.WriteCar(ctx, rem.NodeGetter, cids, w); err != nil {
+	if err = WriteCar(ctx, rem.NodeGetter, cids, w); err != nil {
 		log.Debugf("error while writing car file: err=%v", err.Error())
-		return err
+		return
 	}
 
 	// We must flush the buffer or we could get unexpected EOF errors on the other end
 	w.Flush()
-	pl := payload.PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
+
+	// TODO: conditional providerGraphEstimate logic, might be nil
+	var pl payload.PushRequestor
+	if providerGraphEstimate != nil {
+		pl = payload.PushRequestor{BB: providerGraphEstimate.Bytes(), BK: uint(providerGraphEstimate.HashCount()), PL: b.Bytes()}
+	} else {
+		pl = payload.PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
+	}
 	plBytes, err := payload.CborEncode(pl)
 	if err != nil {
 		log.Debugf("error while encoding payload in cbor: err=%v", err.Error())
-		return err
+		return
 	}
 	plReader := bytes.NewReader(plBytes)
 
-	url := fmt.Sprintf("%s%s", rem.URL, "/dag/push")
-	req, err := http.NewRequest("POST", url, plReader)
+	var endpoint string
+	if diff != "" {
+		endpoint = fmt.Sprintf("%s/dag/push?diff=%s", rem.URL, diff)
+	} else {
+		endpoint = fmt.Sprintf("%s/dag/push", rem.URL)
+	}
+	req, err := http.NewRequest("POST", endpoint, plReader)
 	req.Header.Set("Content-Type", cborMIMEType)
 	req.Header.Set("Accept", cborMIMEType)
 
-	log.Debugf("req = %v", req)
 	if err != nil {
-		return err
+		return
 	}
 
 	res, err := http.DefaultClient.Do(req)
-	log.Debugf("res = %v", res)
 	if err != nil {
-		return err
+		return
 	}
 	defer res.Body.Close()
 
-	log.Debugf("before reading all body, err=%v", err)
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if resBytes == nil {
-		return err
+		return
 	}
 
-	// TODO: we expect a CBOR response and should parse it for now.  Longer term it will be used for multiple rounds.
-	resMsg := string(resBytes)
-	log.Debugf("expected response to be nil, got %v", resMsg)
+	var pushProvider payload.PushProvider
+	if err = payload.CborDecode(resBytes, &pushProvider); err != nil {
+		return
+	}
 
-	return nil
+	subgraphRoots, err = dag.ParseCids(pushProvider.SR)
+	if err != nil {
+		return
+	}
+
+	providerGraphConfirmation = bloom.NewFilterFromBloomBytes(uint64(len(pushProvider.BB)*8), uint64(pushProvider.BK), pushProvider.BB)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
@@ -120,7 +145,7 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	}
 
 	// add car to local blockstore
-	_, err = AddAllFromCarReader(ctx, rem.BlockAPI, bytes.NewReader(resBytes), nil)
+	_, _, err = AddAllFromCarReader(ctx, rem.BlockAPI, bytes.NewReader(resBytes), nil)
 	if err != nil {
 		// getting unexpected EOF as err here
 		log.Debugf("error in AddAllFromCarReader: err=%v", err.Error())
@@ -130,14 +155,10 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	return nil
 }
 
-// func (rem *HTTPClient) NewPushSession() (PushSession, error) {
-// 	return &httpPushSession{
-// 		rem: rem,
-// 	}, nil
-// }
-
-func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO: parse diff param
+		// diff := r.FormValue("diff")
 		log.Debugf("In HTTPRemotePushHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
 
@@ -156,7 +177,8 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 			return
 		}
 
-		_, err = AddAllFromCarReader(r.Context(), cm.bapi, bytes.NewReader(pushRequest.PL), nil)
+		// TODO: save root CIDs from CAR so we can walk them and construct bloom filter
+		_, cids, err := AddAllFromCarReader(r.Context(), cm.bapi, bytes.NewReader(pushRequest.PL), nil)
 		if err != nil {
 			// getting unexpected EOF as err here
 			log.Debugf("error in AddAllFromCarReader: err=%v", err.Error())
@@ -164,12 +186,40 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// log.Debugf("decoded payload = %v", pushRequest)
+		subgraphRoots, err := cm.SubgraphRoots(r.Context(), cids)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		subgraphRootsStr := make([]string, len(subgraphRoots))
+		for i, c := range subgraphRoots {
+			subgraphRootsStr[i] = c.String()
+		}
 
-		// w.WriteHeader(http.StatusOK)
+		// TODO: Use diff to generate a bloom filter to return in the pushProvider payload
+		// Resolve diff
+		// Locally traverse DAG underneath diff and get list of CIDs, adding them to bloom
+		// Also collect list of subgraph roots to return in SR in the payload
+		// (relative to the CIDs in the push? Or in the diff?)  For all CIDs pushed for the entire session or the request?
+
+		// Start with subgraphRoots
+		var providerGraphConfirmation *bloom.Filter
+		bloomCids, err := cm.GetLocalCids(r.Context(), subgraphRoots)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		n := uint64(len(bloomCids) * 8)
+		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.0001)
+		for _, cid := range bloomCids {
+			providerGraphConfirmation.Add(cid.Bytes())
+		}
 
 		// On success, return the PushProviderPayload, for now with nothing of interest
-		pushProvider := payload.PushProvider{SR: []string{}, BK: 0, BB: nil}
+		pushProvider := payload.PushProvider{SR: subgraphRootsStr, BK: uint(providerGraphConfirmation.HashCount()), BB: providerGraphConfirmation.Bytes()}
+		log.Debugf("pushProvider=%v", pushProvider)
 		pushProviderBytes, err := payload.CborEncode(pushProvider)
 		if err != nil {
 			w.Write([]byte(err.Error()))
@@ -178,10 +228,45 @@ func HTTPRemotePushHandler(cm *CarMirror) http.HandlerFunc {
 		}
 
 		w.Write(pushProviderBytes)
+
+		// Complete is 200.  Success is 202.
 	}
 }
 
-func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
+func (cm *CarMirror) SubgraphRoots(ctx context.Context, cids []cid.Cid) (subgraphRoots []cid.Cid, err error) {
+	subgraphRootsMap := make(map[cid.Cid]bool)
+	// convert cids to hashmap efficient membership checking
+	cidsMap := make(map[cid.Cid]bool)
+	for _, c := range cids {
+		cidsMap[c] = true
+	}
+
+	// iterate through cids
+	// if they have links and any links are not in cids, add to subgraphRoots, ignoring dupes
+	var node format.Node
+	for _, c := range cids {
+		node, err = cm.lng.Get(ctx, c)
+		if err != nil {
+			return
+		}
+		for _, link := range node.Links() {
+			if _, ok := cidsMap[link.Cid]; !ok {
+				subgraphRootsMap[link.Cid] = true
+			}
+		}
+	}
+	// convert subgraph roots map back to slice
+	subgraphRoots = make([]cid.Cid, len(subgraphRootsMap))
+	i := 0
+	for k := range subgraphRootsMap {
+		subgraphRoots[i] = k
+		i++
+	}
+
+	return
+}
+
+func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Debugf("In HTTPRemotePullHandler")
 		w.Header().Set(httpCarMirrorProtocolIDHeader, string(CarMirrorProtocolID))
@@ -216,7 +301,7 @@ func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
 		var b bytes.Buffer
 		bw := bufio.NewWriter(&b)
 
-		if err := carv1.WriteCar(r.Context(), cm.lng, cids, bw); err != nil {
+		if err := WriteCar(r.Context(), cm.lng, cids, bw); err != nil {
 			log.Debugf("error while writing car file: err=%v", err.Error())
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -226,5 +311,7 @@ func HTTPRemotePullHandler(cm *CarMirror) http.HandlerFunc {
 
 		// return the car file
 		w.Write(b.Bytes())
+
+		// TODO: Return 404 if unable to find any new CID roots.  Otherwise 200.
 	}
 }

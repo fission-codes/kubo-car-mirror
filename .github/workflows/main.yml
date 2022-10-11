@@ -6,8 +6,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ "ubuntu" ]
-        go: [ "1.17.x", "1.18.x" ]
+        os: ["ubuntu"]
+        go: ["1.18.x"]
     env:
       COVERAGES: ""
     runs-on: ${{ matrix.os }}-latest

@@ -2,14 +2,14 @@ TEST_NAME = t0000-car-mirror
 
 .PHONY: test
 
-default: test
+default: all
 
-all: build build-plugin test sharness
+all: build test
 
 clean:
 	go clean ./...
 
-build:
+build-core:
 	go build ./...
 	go build -o ./cmd/carmirror ./cmd/carmirror.go
 
@@ -26,7 +26,11 @@ setup-plugin:
 build-plugin: setup-plugin
 	$(MAKE) -C ../kubo build
 
-test:
+build: build-core build-plugin
+
+test: test-unit sharness
+
+test-unit:
 	go test ./... -v --coverprofile=coverage.txt --covermode=atomic
 
 sharness:

@@ -28,18 +28,18 @@ git clone https://github.com/ipfs/kubo
 # Change to the go-car-mirror directory to run make targets
 cd go-car-mirror
 
-# Build
+# Build everything, including the kubo plugin
 make build
-
-# Build the kubo plugin
-make build-plugin
 ```
 
 ## Testing
 
 ```
-# Run Go tests
+# Run unit and sharness tests
 make test
+
+# Run unit tests
+make test-unit
 
 # Run sharness tests
 make sharness
@@ -76,8 +76,13 @@ You can interact with local CAR Mirror APIs using the `carmirror` CLI.
 During development, you might want to run in a testbed with [iptb](https://github.com/ipfs/iptb).  This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
 
 ```
-# set up path, functions, etc
+# Set up path, functions, etc
 source test/lib/carmirror-lib.sh
+
+# Create a temp dir to redirect downloads to with -o.
+# Note, if you redirect to /dev/null instead, error messages will be silently swallowed.
+DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
+CM_TMP=$(mktemp -d "/tmp/carmirror_tests.$DATE.XXXXXX") || die "could not 'mktemp -d /tmp/carmirror_tests.$DATE.XXXXXX'"
 
 # Create a 2 node testbed
 iptb_new
@@ -89,10 +94,10 @@ iptb_start
 ipfsi 0 dag import test/sharness/t0000-car-mirror-data/car-mirror.car
 
 # confirm CID is on node 0
-ipfsi 0 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+ipfsi 0 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 
 # confirm CID is not on node 1
-ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 
 # push CID from node 0 to node 1
 carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
@@ -107,7 +112,7 @@ iptb_logs 0
 iptb_logs 1
 
 # confirm CID is on node 1 now
-ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o /dev/null
+ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 
 # shutdown and cleanup
 iptb_stop
@@ -120,7 +125,7 @@ You can enable debugging in the logs using the `GOLOG_LOG_LEVEL` environment var
 
 ```
 # Turn on debugging
-export GOLOG_LOG_LEVEL="car-mirror=debug,car-mirror-plugin=debug"
+export GOLOG_LOG_LEVEL="error,car-mirror=debug"
 
 # Start daemon, start testbed, run commands, ...
 ```
@@ -135,6 +140,12 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 
 # Configure port for remotely accessible commands (i.e. the actual protocol commands)
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '":2503"'
+
+# Configure max blocks to send for cold calls
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerColdCall 100
+
+# Configure max blocks to send per round
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerRound 200
 
 # Disable the plugin
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Disabled true
