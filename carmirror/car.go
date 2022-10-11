@@ -12,14 +12,15 @@ import (
 
 func AddAllFromCarReader(ctx context.Context, bapi coreiface.BlockAPI, r io.Reader, progCh chan cid.Cid) (int, []cid.Cid, error) {
 	log.Debugf("AddAllFromCarReader")
-	cids := []cid.Cid{}
 	rdr, err := car.NewCarReader(r)
 	if err != nil {
-		return 0, cids, err
+		return 0, []cid.Cid{}, err
 	}
+	cids := make([]cid.Cid, len(rdr.Header.Roots))
 
 	added := 0
 	buf := &bytes.Buffer{}
+	i := 0
 	for {
 		blk, err := rdr.Next()
 		if err == io.EOF {
@@ -37,7 +38,8 @@ func AddAllFromCarReader(ctx context.Context, bapi coreiface.BlockAPI, r io.Read
 
 		buf.Reset()
 		added++
-		cids = append(cids, blk.Cid())
+		cids[i] = blk.Cid()
+		i += 1
 
 		log.Debugf("wrote block %s", blk.Cid())
 		if progCh != nil {

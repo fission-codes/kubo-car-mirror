@@ -341,9 +341,10 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 // The root CID is included in the returned list.
 // In the case of an error, both the discovered CIDs thus far and the error are returned.
 func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCids []gocid.Cid) ([]gocid.Cid, error) {
-	var cids []gocid.Cid
+	cids := make([]gocid.Cid, len(rootCids))
 	var cidsSet = gocid.NewSet()
 
+	i := 0
 	for _, cid := range rootCids {
 		rp, err := cm.capi.ResolvePath(ctx, path.New(cid.String()))
 		if err != nil {
@@ -358,7 +359,8 @@ func (cm *CarMirror) GetLocalCids(ctx context.Context, rootCids []gocid.Cid) ([]
 		}
 		// We confirmed the cid is on this node, so add it to the list
 		if cidsSet.Visit(cid) {
-			cids = append(cids, cid)
+			cids[i] = cid
+			i += 1
 		}
 		err = traverse.Traverse(obj, traverse.Options{
 			DAG:   nodeGetter,

@@ -9,17 +9,19 @@ import (
 // Converts a list of CID strings into a list of `cid.Cid`s.
 // Returns `nil, error` if any CID strings fail to parse.
 func ParseCids(cids []string) ([]cid.Cid, error) {
-	var rootCids []cid.Cid
+	rootCids := make([]cid.Cid, len(cids))
 	rootCidsSet := cid.NewSet()
 
 	// Create a CAR file containing all CIDs
+	i := 0
 	for _, rootCid := range cids {
 		parsedRootCid, err := ParseCid(rootCid)
 		if err != nil {
 			return nil, err
 		}
 		if rootCidsSet.Visit(*parsedRootCid) {
-			rootCids = append(rootCids, *parsedRootCid)
+			rootCids[i] = *parsedRootCid
+			i += 1
 		}
 	}
 
