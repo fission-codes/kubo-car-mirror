@@ -8,10 +8,17 @@ all: build test
 
 clean:
 	go clean ./...
+	rm lib/*carmirror*
+
+build-rust:
+	@cd ../rs-car-mirror && cargo build --release
+	@cp ../rs-car-mirror/target/release/libcarmirror.dylib lib/
+	@cp ../rs-car-mirror/target/release/libcarmirror.a lib/
+	@cbindgen --lang c ../rs-car-mirror -o lib/carmirror.h
 
 build-core:
-	go build ./...
-	go build -o ./cmd/carmirror ./cmd/carmirror.go
+	go build -ldflags="-r ./lib" ./...
+	go build -ldflags="-r ./lib" -o ./cmd/carmirror ./cmd/carmirror.go
 
 setup-plugin:
 	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
@@ -26,7 +33,7 @@ setup-plugin:
 build-plugin: setup-plugin
 	$(MAKE) -C ../kubo build
 
-build: build-core build-plugin
+build: build-rust build-core build-plugin
 
 test: test-unit sharness
 

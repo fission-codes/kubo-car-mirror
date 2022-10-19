@@ -17,17 +17,24 @@ Go implementation of [CAR Mirror](https://github.com/fission-codes/spec/tree/mai
 go-car-mirror is implemented as a [Kubo Daemon Plugin](https://github.com/ipfs/kubo/blob/master/docs/plugins.md#daemon).
 In order to avoid package versioning issues common with Go plugins, it needs to be built in-tree with Kubo.
 
+Also, this project is building using [Rust](https://www.rust-lang.org/) code from [rs-car-mirror](https://github.com/fission-codes/rs-car-mirror). In order to build this project, you will need the Rust toolchain as well as [cbindgen](https://michael-f-bryan.github.io/rust-ffi-guide/cbindgen.html).
+
+```
+cargo install cbindgen
+```
+
 We provide some make targets to simplify this process.
 
 ```
 # Clone repos to same parent directory
 git clone https://github.com/fission-codes/go-car-mirror
 git clone https://github.com/ipfs/kubo
+git clone https://github.com/fission-codes/rs-car-mirror
 
 # Change to the go-car-mirror directory to run make targets
 cd go-car-mirror
 
-# Build everything, including the kubo plugin
+# Build everything, including the Rust code and Kubo plugin
 make build
 ```
 

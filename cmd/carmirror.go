@@ -1,5 +1,11 @@
 package main
 
+/*
+#cgo LDFLAGS: -L../lib -lcarmirror
+#include "../lib/carmirror.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"io/ioutil"
@@ -76,6 +82,8 @@ func init() {
 }
 
 func main() {
+	C.hello(C.CString("world"))
+
 	if err := root.Execute(); err != nil {
 		fmt.Println(err)
 	}
