@@ -12,7 +12,6 @@ import (
 
 	"github.com/fission-codes/kubo-car-mirror/bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
-	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
@@ -39,7 +38,7 @@ var (
 // or pushable, pullable?
 type CarMirrorable interface {
 	Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error)
-	Pull(ctx context.Context, cids []gocid.Cid) (err error)
+	Pull(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter) (pulledCids []gocid.Cid, err error)
 	// NewSession() (id string, err error)
 	// New
 	// Select
@@ -218,22 +217,6 @@ type PullParams struct {
 	Stream bool
 }
 
-// NewPull creates a pull from a remote address
-func (cm *CarMirror) NewPull(ctx context.Context, cidStr, remoteAddr string, stream bool) (*Pull, error) {
-	id, err := gocid.Parse(cidStr)
-	if err != nil {
-		return nil, err
-	}
-	cids := []gocid.Cid{id}
-
-	rem, err := cm.mirrorableRemote(remoteAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPull(cm.lng, cids, rem, stream), nil
-}
-
 // TODO: Rename to indicate this is really a new push session handler
 func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -309,20 +292,41 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Stream)
 
-			pull, err := cm.NewPull(r.Context(), p.Cid, p.Addr, p.Stream)
+			remote, err := cm.mirrorableRemote(p.Addr)
 			if err != nil {
-				fmt.Printf("error creating pull: %s\n", err.Error())
+				err = errors.Wrapf(err, "unable to get mirrorable remote for addr %v", p.Addr)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
 
-			if err = pull.Do(r.Context()); err != nil {
-				fmt.Printf("pull error: %s\n", err.Error())
+			cid, err := dag.ParseCid(p.Cid)
+			if err != nil {
+				err = errors.Wrapf(err, "unable to parse cid %v", p.Cid)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
 
-			fmt.Println("pull complete")
+			cids := []gocid.Cid{*cid}
+
+			// TODO: how to get shared roots?
+			puller := NewPuller(r.Context(), cm.cfg, cm.lng, cm.capi, cids, cids, remote)
+			for puller.Next() {
+				if puller.ShouldCleanup() {
+					err := puller.Cleanup()
+					if err != nil {
+						break
+					}
+				} else {
+					err := puller.Pull()
+					if err != nil {
+						break
+					}
+				}
+			}
 
 			data, err := json.Marshal(p)
 			if err != nil {
@@ -391,7 +395,7 @@ func WriteCar(ctx context.Context, ng ipld.NodeGetter, cids []gocid.Cid, w io.Wr
 	if err := car.WriteHeader(h, w); err != nil {
 		return fmt.Errorf("writing car header: %s", err)
 	}
-	seen := cid.NewSet()
+	seen := gocid.NewSet()
 	for _, c := range cids {
 		n, err := ng.Get(ctx, c)
 		if err != nil {

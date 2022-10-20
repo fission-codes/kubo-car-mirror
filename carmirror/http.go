@@ -106,16 +106,16 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 	return
 }
 
-func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
+func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid, filter *bloom.Filter) (pulledCids []gocid.Cid, err error) {
 	// create payload
 	cidStrs := make([]string, len(cids))
 	for i, c := range cids {
 		cidStrs[i] = c.String()
 	}
-	pullRequest := payload.PullRequestor{RS: cidStrs, BK: 0, BB: nil}
+	pullRequest := payload.PullRequestor{RS: cidStrs, BK: uint(filter.HashCount()), BB: filter.Bytes()}
 	plBytes, err := payload.CborEncode(pullRequest)
 	if err != nil {
-		return err
+		return
 	}
 	plReader := bytes.NewReader(plBytes)
 
@@ -127,13 +127,13 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 
 	log.Debugf("req = %v", req)
 	if err != nil {
-		return err
+		return
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	log.Debugf("res = %v", res)
 	if err != nil {
-		return err
+		return
 	}
 	defer res.Body.Close()
 
@@ -141,18 +141,18 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	log.Debugf("before reading all body, err=%v", err)
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if resBytes == nil {
-		return err
+		return
 	}
 
 	// add car to local blockstore
-	_, _, err = AddAllFromCarReader(ctx, rem.BlockAPI, bytes.NewReader(resBytes), nil)
+	_, pulledCids, err = AddAllFromCarReader(ctx, rem.BlockAPI, bytes.NewReader(resBytes), nil)
 	if err != nil {
 		// getting unexpected EOF as err here
 		log.Debugf("error in AddAllFromCarReader: err=%v", err.Error())
-		return err
+		return
 	}
 
-	return nil
+	return
 }
 
 func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
@@ -186,7 +186,7 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		subgraphRoots, err := cm.SubgraphRoots(r.Context(), cids)
+		subgraphRoots, err := dag.SubgraphRoots(r.Context(), cm.lng, cids)
 		if err != nil {
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -231,39 +231,6 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 
 		// Complete is 200.  Success is 202.
 	}
-}
-
-func (cm *CarMirror) SubgraphRoots(ctx context.Context, cids []cid.Cid) (subgraphRoots []cid.Cid, err error) {
-	subgraphRootsMap := make(map[cid.Cid]bool)
-	// convert cids to hashmap efficient membership checking
-	cidsMap := make(map[cid.Cid]bool)
-	for _, c := range cids {
-		cidsMap[c] = true
-	}
-
-	// iterate through cids
-	// if they have links and any links are not in cids, add to subgraphRoots, ignoring dupes
-	var node format.Node
-	for _, c := range cids {
-		node, err = cm.lng.Get(ctx, c)
-		if err != nil {
-			return
-		}
-		for _, link := range node.Links() {
-			if _, ok := cidsMap[link.Cid]; !ok {
-				subgraphRootsMap[link.Cid] = true
-			}
-		}
-	}
-	// convert subgraph roots map back to slice
-	subgraphRoots = make([]cid.Cid, len(subgraphRootsMap))
-	i := 0
-	for k := range subgraphRootsMap {
-		subgraphRoots[i] = k
-		i++
-	}
-
-	return
 }
 
 func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
