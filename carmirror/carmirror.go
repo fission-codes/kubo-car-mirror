@@ -214,6 +214,7 @@ type PushParams struct {
 type PullParams struct {
 	Cid    string
 	Addr   string
+	Diff   string
 	Stream bool
 }
 
@@ -287,10 +288,11 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			p := PullParams{
 				Cid:    r.FormValue("cid"),
 				Addr:   r.FormValue("addr"),
+				Diff:   r.FormValue("diff"),
 				Stream: r.FormValue("stream") == "true",
 			}
 
-			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Stream)
+			log.Infof("performing pull:\n\tcid: %s\n\taddr: %s\n\tdiff: %s\n\tstream: %v\n", p.Cid, p.Addr, p.Diff, p.Stream)
 
 			remote, err := cm.mirrorableRemote(p.Addr)
 			if err != nil {
@@ -312,8 +314,18 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			cids := []gocid.Cid{*cid}
 
-			// TODO: how to get shared roots?
-			puller := NewPuller(r.Context(), cm.cfg, cm.lng, cm.capi, cids, cids, remote)
+			// Resolve diff to CID and pass to new puller
+			rp, err := cm.capi.ResolvePath(r.Context(), path.New(cid.String()))
+			if err != nil {
+				err = errors.Wrapf(err, "unable to resolve diff param %v", p.Diff)
+				log.Debugf(err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			sharedRoots := []gocid.Cid{rp.Cid()}
+
+			puller := NewPuller(r.Context(), cm.cfg, cm.lng, cm.capi, cids, sharedRoots, remote)
 			for puller.Next() {
 				if puller.ShouldCleanup() {
 					err := puller.Cleanup()

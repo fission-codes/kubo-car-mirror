@@ -55,11 +55,19 @@ var push = &cobra.Command{
 var pull = &cobra.Command{
 	Use:   "pull",
 	Short: "copy remote cid from remote addr to local repo",
+	Args:  cobra.RangeArgs(2, 3),
 	Run: func(cmd *cobra.Command, args []string) {
 		cid := args[0]
 		addr := args[1]
 
-		endpoint := fmt.Sprintf("/dag/pull/new?cid=%s&addr=%s", cid, addr)
+		var endpoint string
+		if len(args) == 3 {
+			diff := args[2]
+			endpoint = fmt.Sprintf("/dag/pull/new?cid=%s&addr=%s&diff=%s", cid, addr, diff)
+		} else {
+			endpoint = fmt.Sprintf("/dag/pull/new?cid=%s&addr=%s", cid, addr)
+		}
+
 		_, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())

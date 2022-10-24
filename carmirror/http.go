@@ -264,11 +264,17 @@ func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
 			return
 		}
 
+		// TODO: We need to take the list of root CIDs and traverse our local store, adding CIDs we have to the CAR.
+		// But we need to respect max blocks per round here.
+		// We don't need any more state though, because once we're done and return CIDs in CAR, new roots will be computed on the requestor side.
+		nextCids, _, _ := dag.NextCids(r.Context(), cids, cm.lng, cm.capi, uint64(cm.cfg.MaxBlocksPerRound))
+		// TODO: error handling
+
 		// Create a car file from the requested cids
 		var b bytes.Buffer
 		bw := bufio.NewWriter(&b)
 
-		if err := WriteCar(r.Context(), cm.lng, cids, bw); err != nil {
+		if err := WriteCar(r.Context(), cm.lng, nextCids, bw); err != nil {
 			log.Debugf("error while writing car file: err=%v", err.Error())
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)

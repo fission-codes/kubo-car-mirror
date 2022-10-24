@@ -145,7 +145,7 @@ func (p *Puller) NextCids(roots []gocid.Cid) (pullRoots []gocid.Cid, remainingRo
 	rootsSet := gocid.NewSet()
 
 	for _, cid := range roots {
-		log.Debugf("roots: cid = %v", cid)
+		log.Debugf("NextCids: cid = %v", cid)
 		if rootsSet.Visit(cid) {
 			if len(pullRoots) < int(p.maxBlocksPerRound) {
 				pullRoots = append(pullRoots, cid)
