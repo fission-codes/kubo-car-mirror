@@ -186,7 +186,7 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		subgraphRoots, err := dag.SubgraphRoots(r.Context(), cm.lng, cids)
+		subgraphRoots := dag.SubgraphRoots(r.Context(), cm.lng, cids)
 		if err != nil {
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -212,7 +212,7 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			return
 		}
 		n := uint64(len(bloomCids) * 8)
-		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.0001)
+		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
 		for _, cid := range bloomCids {
 			providerGraphConfirmation.Add(cid.Bytes())
 		}

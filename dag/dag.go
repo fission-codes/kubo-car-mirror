@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	gocid "github.com/ipfs/go-cid"
-	format "github.com/ipfs/go-ipld-format"
 	ipld "github.com/ipfs/go-ipld-format"
 	golog "github.com/ipfs/go-log"
 	mdag "github.com/ipfs/go-merkledag"
@@ -47,35 +46,37 @@ func ParseCid(cidStr string) (*gocid.Cid, error) {
 	return &parsedCid, nil
 }
 
-func SubgraphRoots(ctx context.Context, lng ipld.NodeGetter, cids []gocid.Cid) (subgraphRoots []gocid.Cid, err error) {
-	subgraphRootsMap := make(map[gocid.Cid]bool)
-	// convert cids to hashmap efficient membership checking
-	cidsMap := make(map[gocid.Cid]bool)
-	for _, c := range cids {
-		cidsMap[c] = true
+func SubgraphRoots(ctx context.Context, lng ipld.NodeGetter, cids []gocid.Cid) (subgraphRoots []gocid.Cid) {
+	subgraphRootsSet := gocid.NewSet()
+	cidsSet := gocid.NewSet()
+	for _, cid := range cids {
+		cidsSet.Add(cid)
 	}
 
 	// iterate through cids
-	// if they have links and any links are not in cids, add to subgraphRoots, ignoring dupes
-	var node format.Node
-	for _, c := range cids {
-		node, err = lng.Get(ctx, c)
+	// if they have links and any links are not in cids, add those links to subgraphRoots, ignoring dupes
+	// var node format.Node
+	for _, cid := range cids {
+		node, err := lng.Get(ctx, cid)
 		if err != nil {
-			return
+			// If the CID isn't found locally, treat it as a subgraph root
+			subgraphRootsSet.Add(cid)
+			continue
 		}
 		for _, link := range node.Links() {
-			if _, ok := cidsMap[link.Cid]; !ok {
-				subgraphRootsMap[link.Cid] = true
+			if !cidsSet.Has(link.Cid) {
+				subgraphRootsSet.Add(link.Cid)
 			}
 		}
 	}
-	// convert subgraph roots map back to slice
-	subgraphRoots = make([]gocid.Cid, len(subgraphRootsMap))
+	// put subgraph roots in a slice
+	subgraphRoots = make([]gocid.Cid, subgraphRootsSet.Len())
 	i := 0
-	for k := range subgraphRootsMap {
-		subgraphRoots[i] = k
+	subgraphRootsSet.ForEach(func(cid gocid.Cid) error {
+		subgraphRoots[i] = cid
 		i++
-	}
+		return nil
+	})
 
 	return
 }

@@ -158,6 +158,10 @@ func TestFPP(t *testing.T) {
 	if f.FPP(1000) > 0.001 {
 		t.Errorf("Excessive FPP()! n=%v, m=%v, k=%v, fpp=%v", 1000, f.BitCount(), f.HashCount(), f.FPP(1000))
 	}
+
+	if EstimateFPP(1000000) != float64(1)/float64(1_000_000) {
+		t.Errorf("EstimateFPP(1000000) should be 1/1000000")
+	}
 }
 
 func TestLargeNotPowerOfTwo(t *testing.T) {

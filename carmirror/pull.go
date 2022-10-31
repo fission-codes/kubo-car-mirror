@@ -23,10 +23,10 @@ type Puller struct {
 	// CID roots of extra shared structure, to create initial bloom from.
 	// This is analogous to the diff param for Push, but is not specified in the spec, left up to implementors.
 	sharedRoots       []gocid.Cid
-	cleanupCids       []gocid.Cid
 	bloom             *bloom.Filter
 	remote            CarMirrorable
 	currentRound      int64
+	cleanupRound      bool
 	maxBlocksPerRound int64
 }
 
@@ -41,19 +41,25 @@ func NewPuller(ctx context.Context, cfg *Config, lng ipld.NodeGetter, capi corei
 		remote:            remote,
 		currentRound:      0,
 		maxBlocksPerRound: cfg.MaxBlocksPerRound,
+		cleanupRound:      false,
 	}
 	return puller
 }
 
+// Next returns true if there are more CIDs to transmit.
 func (p *Puller) Next() bool {
-	return len(p.remainingRoots)+len(p.cleanupCids) > 0
+	return len(p.remainingRoots) > 0
 }
 
+// ShouldCleanup returns true if the time has come for a cleanup round.
+// TODO: Should we cleanup as soon as a request returns only the requested roots?  If so, this method needs to change.
 func (p *Puller) ShouldCleanup() bool {
-	return len(p.remainingRoots) == 0 && len(p.cleanupCids) > 0
+	return p.cleanupRound
 }
 
+// Pull performs a pull on the remaining roots using the requestor bloom filter.
 func (p *Puller) Pull() (err error) {
+	log.Debugf("Puller.Pull")
 	_, err = p.DoPull(p.remainingRoots, true)
 	if err != nil {
 		return err
@@ -61,32 +67,22 @@ func (p *Puller) Pull() (err error) {
 	return nil
 }
 
+// Cleanup performs a pull on the cleanup CIDs using no bloom filter.
 func (p *Puller) Cleanup() (err error) {
 	log.Debugf("Puller.Cleanup")
-	pullCids, err := p.DoPull(p.cleanupCids, false)
+	_, err = p.DoPull(p.remainingRoots, false)
 	if err != nil {
 		return err
 	}
-
-	// Remove pulled cids from cleanupCids
-	var newCleanupCids []gocid.Cid
-	cleanupCidsSet := gocid.NewSet()
-	for _, cid := range p.cleanupCids {
-		cleanupCidsSet.Add(cid)
-	}
-	for _, cid := range pullCids {
-		if !cleanupCidsSet.Has(cid) {
-			newCleanupCids = append(newCleanupCids, cid)
-		}
-	}
-	p.cleanupCids = newCleanupCids
+	p.cleanupRound = false
 
 	return nil
 }
 
 func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.Cid, err error) {
-	log.Debugf("Puller.Pull")
+	log.Debugf("Puller.DoPull")
 
+	// TODO: Use remainingRoots for efficiency, vs recomputing remainingRoots every time.
 	pullRoots, remainingRoots := p.NextCids(roots)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to get next CIDs")
@@ -96,19 +92,15 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 
 	// Need to decide when to recreate due to saturation
 	if includeBloom {
+		// TODO: If blockstore is small enough, just add all blocks to the bloom
 		if p.currentRound == 0 {
 			bloomCids := p.UniqueLocalCids(append(p.pullRoots, p.sharedRoots...))
 			n := uint64(len(bloomCids))
-			p.bloom = bloom.NewFilterWithEstimates(n, 0.0001)
+			p.bloom = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
 			for _, cid := range bloomCids {
 				p.bloom.Add(cid.Bytes())
 			}
 			log.Debugf("Cold start.  Building bloom from all known local CIDs.")
-		} else if p.bloom != nil {
-			// TODO: If we don't update it elsewhere, make sure the blm is a bloom that combines all returned confirmations into a new bloom with all of their adds.
-			log.Debugf("round > 0 and bloom not nil, setting blm to bloom")
-		} else {
-			log.Debugf("p.bloom is nil, so not setting blm")
 		}
 	}
 
@@ -128,12 +120,15 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 		p.bloom.Add(cid.Bytes())
 	}
 
-	// Compute subgraph roots from those we pulled, and apend to remaining roots
-	subgraphRoots, err := dag.SubgraphRoots(p.ctx, p.lng, pulledCids)
+	// If only the requested roots were returned, we need a cleanup round
+	p.cleanupRound = sameCids(pulledCids, pullRoots)
+
+	// Update remaining roots
+	pulledRemainingRoots, err := p.RemainingRoots(pullRoots)
 	if err != nil {
 		return
 	}
-	p.remainingRoots = append(remainingRoots, subgraphRoots...)
+	p.remainingRoots = append(pulledRemainingRoots, remainingRoots...)
 
 	// This won't be needed once I clean up where blooms are set
 	p.currentRound += 1
@@ -141,11 +136,54 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 	return pullCids, nil
 }
 
+func sameCids(a []gocid.Cid, b []gocid.Cid) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Equals(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// CleanupCids returns the list of CIDs from pullRoots that are not in pulledCids.
+// All pullRoots are supposed to be transmitted regardless of bloom filter, so their
+// absence indicates they may need to be cleaned up.
+func CleanupCids(pullRoots []gocid.Cid, pulledCids []gocid.Cid) (cleanupCids []gocid.Cid) {
+	pulledCidsSet := gocid.NewSet()
+	for _, cid := range pulledCids {
+		pulledCidsSet.Add(cid)
+	}
+	cleanupCidsSet := gocid.NewSet()
+
+	for _, cid := range pullRoots {
+		if !pulledCidsSet.Has(cid) {
+			if cleanupCidsSet.Visit(cid) {
+				cleanupCids = append(cleanupCids, cid)
+			}
+		}
+	}
+
+	return
+}
+
+// RemainingRoots returns the list of subgraph roots underneath pullRoots that are not cleanup CIDs.
+func (p *Puller) RemainingRoots(pullRoots []gocid.Cid) (remainingRoots []gocid.Cid, err error) {
+	subgraphRoots := dag.SubgraphRoots(p.ctx, p.lng, pullRoots)
+	if err != nil {
+		log.Debugf("error getting subgraph roots. err = %v, subgraphRoots = %v", err, subgraphRoots)
+		return nil, err
+	}
+
+	return subgraphRoots, nil
+}
+
 func (p *Puller) NextCids(roots []gocid.Cid) (pullRoots []gocid.Cid, remainingRoots []gocid.Cid) {
 	rootsSet := gocid.NewSet()
 
 	for _, cid := range roots {
-		log.Debugf("NextCids: cid = %v", cid)
 		if rootsSet.Visit(cid) {
 			if len(pullRoots) < int(p.maxBlocksPerRound) {
 				pullRoots = append(pullRoots, cid)

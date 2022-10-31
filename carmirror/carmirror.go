@@ -326,16 +326,32 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			sharedRoots := []gocid.Cid{rp.Cid()}
 
 			puller := NewPuller(r.Context(), cm.cfg, cm.lng, cm.capi, cids, sharedRoots, remote)
+			log.Debugf("Created new puller = %v", puller)
+
+			// Compute remaining roots from the passed in CIDs, so we know we're dealing with CIDs not present locally
+			remainingRoots, err := puller.RemainingRoots(puller.pullRoots)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			puller.remainingRoots = remainingRoots
+			log.Debugf("set remainingRoots to %v", remainingRoots)
+
 			for puller.Next() {
 				if puller.ShouldCleanup() {
 					err := puller.Cleanup()
 					if err != nil {
-						break
+						w.WriteHeader(http.StatusInternalServerError)
+						w.Write([]byte(err.Error()))
+						return
 					}
 				} else {
 					err := puller.Pull()
 					if err != nil {
-						break
+						w.WriteHeader(http.StatusInternalServerError)
+						w.Write([]byte(err.Error()))
+						return
 					}
 				}
 			}
@@ -344,6 +360,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
+				return
 			}
 
 			// Write out JSON encoded params for the request
