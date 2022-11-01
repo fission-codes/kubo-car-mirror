@@ -77,7 +77,7 @@ func (f *Filter) Add(data []byte) *Filter {
 }
 
 // Returns true if all k bits of the Bloom filter are set for the specified data.  Otherwise false.
-func (f *Filter) Test(data []byte) bool {
+func (f *Filter) Has(data []byte) bool {
 	hasher := NewHasher(f.bitCount, f.hashCount, data)
 
 	for hasher.Next() {
