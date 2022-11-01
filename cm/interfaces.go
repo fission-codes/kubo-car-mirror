@@ -18,8 +18,8 @@ type BlockId interface {
 // What we call a Block, IPLD splits into both Block and Node.
 //
 //   Block
-//   https://ipld.io/glossary/#block
-//   https://github.com/ipfs/go-block-format/blob/master/blocks.go#L20
+//     https://ipld.io/glossary/#block
+//     https://github.com/ipfs/go-block-format/blob/master/blocks.go#L20
 //
 //   Node
 //     https://ipld.io/glossary/#node
@@ -34,7 +34,7 @@ type BlockId interface {
 // Other Nodes have children that are stored in other Blocks, either because they don't fit in one block or to take advantage of content IDs and deduplication.
 // IPLD calls these content identified children `Links`.
 //
-// For purposes of transmitting blocks, we don't care about a children nested within the same block.
+// For purposes of transmitting blocks, we don't care about a child nested within the same block.
 // We only care about a Block and its Links to other Blocks, in order to ensure that all nested blocks are transmitted.
 // As such, we have collapsed the definition of Node and Block into just Block, and the block's links are represented as `Links` on the Block.
 type Block interface {
@@ -88,19 +88,20 @@ type BlockIdFilter interface {
 	// TODO: Does this need extra methods related to its sizing, saturation, etc?
 }
 
+// BlockSender is responsible for sending blocks - immediately and asynchronously, or via a buffer.
+// The details are up to the implementor.
 type BlockSender interface {
 	Send(Block)
 	Flush()
 }
 
+// BlockReceiver is responsible for receiving blocks.
 type BlockReceiver interface {
+	// Receive is called on receipt of a new block.
 	Receive(Block)
 }
 
-type StatusSender interface {
-	Send(have BlockIdFilter, want []BlockId)
-}
-
+// StatusAccumulator is responsible for collecting status.
 type StatusAccumulator interface {
 	Have(BlockId)
 	Need(BlockId)
@@ -108,6 +109,19 @@ type StatusAccumulator interface {
 	Send(StatusSender)
 }
 
+// StatusSender is responsible for sending status.
+// The key intuition of CAR Mirror is that status can be sent efficiently using a lossy filter.
+// The StatusSender will therefore usually batch reported information and send it in bulk to the ReceiverSession.
+type StatusSender interface {
+	Send(have BlockIdFilter, want []BlockId)
+}
+
+// StatusReceiver is responsible for receiving a status.
+type StatusReceiver interface {
+	HandleStatus(have BlockIdFilter, want []BlockId)
+}
+
+// Orchestrator is responsible for managing the flow of blocks and/or status.
 type Orchestrator interface {
 	BeginSend()
 	EndSend()
