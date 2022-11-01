@@ -38,8 +38,8 @@ type BlockId interface {
 // We only care about a Block and its Links to other Blocks, in order to ensure that all nested blocks are transmitted.
 // As such, we have collapsed the definition of Node and Block into just Block, and the block's links are represented as `Links` on the Block.
 type Block interface {
-	// Id returns the BlockId for the Block.
-	Id() BlockId
+	// Cid returns the BlockId for the Block.
+	Cid() BlockId
 
 	// RawBytes returns the bytes associated with the Block.
 	RawBytes() []byte
@@ -83,7 +83,7 @@ type BlockIdFilter interface {
 	Has(id BlockId) bool
 
 	// Merge merges two Filters together.
-	Merge(other *BlockIdFilter) *BlockIdFilter
+	// Merge(other BlockIdFilter) BlockIdFilter
 
 	// TODO: Does this need extra methods related to its sizing, saturation, etc?
 }

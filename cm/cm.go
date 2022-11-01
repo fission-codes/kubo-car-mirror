@@ -25,7 +25,7 @@ func NewIpldBlock(id gocid.Cid, rawBytes []byte, links []BlockId) *IpldBlock {
 	}
 }
 
-func (b *IpldBlock) Id() BlockId {
+func (b *IpldBlock) Cid() BlockId {
 	return b.id
 }
 
@@ -61,7 +61,7 @@ func (bs *MemoryIpldBlockStore) Has(cid BlockId) bool {
 }
 
 func (bs *MemoryIpldBlockStore) Put(block Block) {
-	cid := block.Id().String()
+	cid := block.Cid().String()
 	bs.blocks[cid] = &block
 }
 
@@ -90,20 +90,22 @@ func (f *BloomFilter) Has(id BlockId) bool {
 	return f.filter.Test(id.Bytes())
 }
 
-func (f *BloomFilter) Merge(other *BlockIdFilter) *BloomFilter {
+func (f *BloomFilter) Merge(other BlockIdFilter) BloomFilter {
 	// TODO: Merge bloom filters together
-	return f
+	return *f
 }
 
-// var _ Filter = (*BloomFilter)(nil)
+var _ BlockIdFilter = (*BloomFilter)(nil)
 
 // BlockSender
 
 // BlockReceiver
 
+// StatusAccumulator
+
 // StatusSender
 
-// StatusAccumulator
+// StatusReceiver
 
 // Orchestrator
 
