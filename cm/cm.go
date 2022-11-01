@@ -87,7 +87,7 @@ func (f *BloomFilter) Add(id BlockId) {
 }
 
 func (f *BloomFilter) Has(id BlockId) bool {
-	return f.filter.Has(id.Bytes())
+	return f.filter.Test(id.Bytes())
 }
 
 func (f *BloomFilter) Merge(other *Filter) *BloomFilter {
@@ -95,7 +95,7 @@ func (f *BloomFilter) Merge(other *Filter) *BloomFilter {
 	return f
 }
 
-var _ Filter = (*BloomFilter)(nil)
+// var _ Filter = (*BloomFilter)(nil)
 
 // BlockSender
 

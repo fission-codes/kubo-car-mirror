@@ -25,11 +25,11 @@ func TestBasic(t *testing.T) {
 	n2 := []byte("two")
 	n3 := []byte("three")
 	f.Add(n1)
-	n3a := f.Has(n3)
+	n3a := f.Test(n3)
 	f.Add(n3)
-	n1b := f.Has(n1)
-	n2b := f.Has(n2)
-	n3b := f.Has(n3)
+	n1b := f.Test(n1)
+	n2b := f.Test(n2)
+	n3b := f.Test(n3)
 	if !n1b {
 		t.Errorf("%v should be in.", n1)
 	}
@@ -57,15 +57,15 @@ func TestBasicUint32(t *testing.T) {
 	binary.BigEndian.PutUint32(n4, 103)
 	binary.BigEndian.PutUint32(n5, 104)
 	f.Add(n1)
-	n3a := f.Has(n3)
+	n3a := f.Test(n3)
 	f.Add(n3)
-	n1b := f.Has(n1)
-	n2b := f.Has(n2)
-	n3b := f.Has(n3)
-	n5a := f.Has(n5)
+	n1b := f.Test(n1)
+	n2b := f.Test(n2)
+	n3b := f.Test(n3)
+	n5a := f.Test(n5)
 	f.Add(n5)
-	n5b := f.Has(n5)
-	f.Has(n4)
+	n5b := f.Test(n5)
+	f.Test(n4)
 	if !n1b {
 		t.Errorf("%v should be in.", n1)
 	}
@@ -151,7 +151,7 @@ func TestFPP(t *testing.T) {
 	for i := uint32(0); i < 1000; i++ {
 		b := make([]byte, 4)
 		binary.BigEndian.PutUint32(b, i+1000)
-		if f.Has(b) {
+		if f.Test(b) {
 			count += 1
 		}
 	}
@@ -167,7 +167,7 @@ func TestLargeNotPowerOfTwo(t *testing.T) {
 		item := make([]byte, 4)
 		rand.Read(item)
 		f.Add(item)
-		if f.Has(item) != true {
+		if f.Test(item) != true {
 			t.Errorf("should always return true for something added, i=%v, item=%v", i, item)
 		}
 	}

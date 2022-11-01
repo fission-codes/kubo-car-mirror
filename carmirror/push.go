@@ -98,7 +98,7 @@ func (p *Pusher) NextCids(rootCids []gocid.Cid) (pushCids []gocid.Cid, remaining
 			Order: traverse.BFS, // Breadth first
 			Func: func(current traverse.State) error {
 				// Always push root CIDs, or all CIDs if no bloom was provided.  Otherwise only push if CID isn't in bloom.
-				if rootCidsSet.Has(cid) || len(p.providerGraphConfirmation.Bytes()) == 0 || !p.providerGraphConfirmation.Has(current.Node.Cid().Bytes()) {
+				if rootCidsSet.Has(cid) || len(p.providerGraphConfirmation.Bytes()) == 0 || !p.providerGraphConfirmation.Test(current.Node.Cid().Bytes()) {
 					if len(pushCids) < int(maxBlocks) {
 						if pushCidsSet.Visit(current.Node.Cid()) {
 							pushCids = append(pushCids, current.Node.Cid())
