@@ -2,33 +2,41 @@ package cm
 
 // block "github.com/ipfs/go-block-format"
 
-// Block is defined in go-block-format.
-//   https://github.com/ipfs/go-block-format/blob/master/blocks.go
-// Node is defined in go-ipld-format as Block interface plus other methods, including Links().
-//   https://github.com/ipfs/go-ipld-format/blob/master/format.go#L26
-// We're combining the two ideas into one?
-// Or should we just stick with IPLD as an assumption and use Node?
-// Is it that a block's binary data can include links, and IPLD's format includes how what we call links
-// are encoded into the bytes in a block?  And technically if you can fit multiple nodes into a single Block you can do that?  i.e. even multiple Nodes that each have Links could be in a single Block?
-
-// TODO: Should this have a Bytes() method, so we can use the raw bytes as keys in maps?
+// BlockId represents a unique identifier for a Block.
+// This interface only represents the identifier, not the Block.
 type BlockId interface {
+	// Bytes returns the BlockId as a byte slice.
 	Bytes() []byte
+
+	// String returns the BlockId as a string.
+	// This is useful when the BlockId must be represented as a string (e.g. when used as a key in a map).
 	String() string
 }
 
 // Block is an immutable data block referenced by a unique ID.
 //
 // What we call a Block, IPLD splits into both Block and Node.
-//   https://ipld.io/glossary/#block
-//   https://ipld.io/docs/data-model/node/#nodes-vs-blocks
-// Node is each thing in a block (e.g. String, Float, Boolean, ...).
-// Some Nodes have children (e.g. List, Map).  These can be encoded in a single Block if they fit.
-// Some Nodes have children that are other found in other Blocks.  IPLD calls these Links.
 //
-// For purposes of transmitting blocks, we don't care about a Node that represents items without links
-// (e.g. String, ... that fit within a single block).  We only care about a Block and its Links to other Blocks.
-// As such, we have collapsed the definition of Node and Block into just Block, and Links are represented as Children on Block.
+//   Block
+//   https://ipld.io/glossary/#block
+//   https://github.com/ipfs/go-block-format/blob/master/blocks.go#L20
+//
+//   Node
+//     https://ipld.io/glossary/#node
+//     https://ipld.io/docs/data-model/node/#node
+//     https://github.com/ipfs/go-ipld-format/blob/master/format.go#L26
+//
+//   Blocks vs Nodes
+//     https://ipld.io/docs/data-model/node/#nodes-vs-blocks
+//
+// Node is the term used for each piece of data in a block (e.g. String, Float, Boolean, ...).
+// Some Nodes have children that can be stored in a single block if they fit (e.g. for items in a list if the list is small).
+// Other Nodes have children that are stored in other Blocks, either because they don't fit in one block or to take advantage of content IDs and deduplication.
+// IPLD calls these content identified children `Links`.
+//
+// For purposes of transmitting blocks, we don't care about a children nested within the same block.
+// We only care about a Block and its Links to other Blocks, in order to ensure that all nested blocks are transmitted.
+// As such, we have collapsed the definition of Node and Block into just Block, and the block's links are represented as `Links` on the Block.
 type Block interface {
 	// Id returns the BlockId for the Block.
 	Id() BlockId
@@ -40,6 +48,7 @@ type Block interface {
 	Links() []BlockId
 }
 
+// ReadableBlockStore represents read operations for a store of blocks.
 type ReadableBlockStore interface {
 	// Get gets the Block from the store with the given BlockId
 	Get(BlockId) Block
@@ -65,7 +74,8 @@ type MutablePointerResolver interface {
 	Resolve(ptr string) (id BlockId, err error)
 }
 
-type Filter interface {
+// BlockIdFilter is anything similar to a bloom filter that can efficiently (and without perfect accuracy) keep track of a list of `BlockId`s.
+type BlockIdFilter interface {
 	// Add adds a BlockId to the Filter.
 	Add(id BlockId)
 
@@ -73,7 +83,9 @@ type Filter interface {
 	Has(id BlockId) bool
 
 	// Merge merges two Filters together.
-	Merge(other *Filter) *Filter
+	Merge(other *BlockIdFilter) *BlockIdFilter
+
+	// TODO: Does this need extra methods related to its sizing, saturation, etc?
 }
 
 type BlockSender interface {
@@ -86,7 +98,7 @@ type BlockReceiver interface {
 }
 
 type StatusSender interface {
-	Send(have Filter, want []BlockId)
+	Send(have BlockIdFilter, want []BlockId)
 }
 
 type StatusAccumulator interface {

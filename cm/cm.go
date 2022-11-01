@@ -90,7 +90,7 @@ func (f *BloomFilter) Has(id BlockId) bool {
 	return f.filter.Test(id.Bytes())
 }
 
-func (f *BloomFilter) Merge(other *Filter) *BloomFilter {
+func (f *BloomFilter) Merge(other *BlockIdFilter) *BloomFilter {
 	// TODO: Merge bloom filters together
 	return f
 }
@@ -114,14 +114,14 @@ func (f *BloomFilter) Merge(other *Filter) *BloomFilter {
 type SenderSession struct {
 	blockSender  BlockSender
 	orchestrator Orchestrator
-	filter       Filter
+	filter       BlockIdFilter
 	sentCids     []BlockId // change to cid set if we don't need order
 	// is peer needed?  Or is this global, with peerId as a key for sentCids, like spec says
 }
 
-func (ss *SenderSession) SendBlock(BlockId)                         {}
-func (ss *SenderSession) HandleStatus(have *Filter, wanted BlockId) {}
-func (ss *SenderSession) Flush()                                    {}
+func (ss *SenderSession) SendBlock(BlockId)                                {}
+func (ss *SenderSession) HandleStatus(have *BlockIdFilter, wanted BlockId) {}
+func (ss *SenderSession) Flush()                                           {}
 
 // ReceiverSession
 
