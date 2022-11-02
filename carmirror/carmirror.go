@@ -314,16 +314,19 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			cids := []gocid.Cid{*cid}
 
-			// Resolve diff to CID and pass to new puller
-			rp, err := cm.capi.ResolvePath(r.Context(), path.New(cid.String()))
-			if err != nil {
-				err = errors.Wrapf(err, "unable to resolve diff param %v", p.Diff)
-				log.Debugf(err.Error())
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
-				return
+			// If we received a diff parameter, resolve it to a CID and pass to new puller
+			var sharedRoots []gocid.Cid
+			if p.Diff != "" {
+				rp, err := cm.capi.ResolvePath(r.Context(), path.New(cid.String()))
+				if err != nil {
+					err = errors.Wrapf(err, "unable to resolve diff param %v", p.Diff)
+					log.Debugf(err.Error())
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				sharedRoots = []gocid.Cid{rp.Cid()}
 			}
-			sharedRoots := []gocid.Cid{rp.Cid()}
 
 			puller := NewPuller(r.Context(), cm.cfg, cm.lng, cm.capi, cids, sharedRoots, remote)
 			log.Debugf("Created new puller = %v", puller)

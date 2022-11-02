@@ -59,7 +59,7 @@ func SubgraphRoots(ctx context.Context, lng ipld.NodeGetter, cids []gocid.Cid) (
 	for _, cid := range cids {
 		node, err := lng.Get(ctx, cid)
 		if err != nil {
-			// If the CID isn't found locally, treat it as a subgraph root
+			// If the CID isn't found locally, treat it as a subgraph root, though perhaps we should error
 			subgraphRootsSet.Add(cid)
 			continue
 		}
@@ -95,47 +95,45 @@ func NextCids(ctx context.Context, cids []gocid.Cid, lng ipld.NodeGetter, capi c
 	cidsSet := gocid.NewSet()
 
 	for _, cid := range cids {
-		if cidsSet.Visit(cid) {
-			var rp path.Resolved
-			var nd ipld.Node
+		var rp path.Resolved
+		var nd ipld.Node
 
-			rp, err := capi.ResolvePath(ctx, path.New(cid.String()))
-			if err != nil {
-				notFoundCids = append(notFoundCids, cid)
-				log.Debugf("unable to resolve path for root cid %s.  Adding to notFoundCids.  err=%v", cid.String(), err)
-				continue
-			}
+		rp, err := capi.ResolvePath(ctx, path.New(cid.String()))
+		if err != nil {
+			notFoundCids = append(notFoundCids, cid)
+			log.Debugf("unable to resolve path for root cid %s.  Adding to notFoundCids.  err=%v", cid.String(), err)
+			continue
+		}
 
-			nodeGetter := mdag.NewSession(ctx, lng)
-			nd, err = nodeGetter.Get(ctx, rp.Cid())
-			if err != nil {
-				notFoundCids = append(notFoundCids, cid)
-				log.Debugf("unable to get nodes for root cid %s.  Adding to notFoundCids.  err=%v", cid.String(), err)
-				continue
-			}
+		nodeGetter := mdag.NewSession(ctx, lng)
+		nd, err = nodeGetter.Get(ctx, rp.Cid())
+		if err != nil {
+			notFoundCids = append(notFoundCids, cid)
+			log.Debugf("unable to get nodes for root cid %s.  Adding to notFoundCids.  err=%v", cid.String(), err)
+			continue
+		}
 
-			err = traverse.Traverse(nd, traverse.Options{
-				DAG:   nodeGetter,
-				Order: traverse.BFS, // Breadth first
-				Func: func(current traverse.State) error {
-					if cidsSet.Visit(current.Node.Cid()) {
-						if len(nextCids) < int(maxBlocks) {
-							nextCids = append(nextCids, current.Node.Cid())
-						} else {
-							remainingCids = append(remainingCids, current.Node.Cid())
-						}
+		err = traverse.Traverse(nd, traverse.Options{
+			DAG:   nodeGetter,
+			Order: traverse.BFS, // Breadth first
+			Func: func(current traverse.State) error {
+				if cidsSet.Visit(current.Node.Cid()) {
+					if len(nextCids) < int(maxBlocks) {
+						nextCids = append(nextCids, current.Node.Cid())
+					} else {
+						remainingCids = append(remainingCids, current.Node.Cid())
 					}
-					return nil
-				},
+				}
+				return nil
+			},
 
-				ErrFunc:        nil,
-				SkipDuplicates: true,
-			})
-			if err != nil {
-				notFoundCids = append(notFoundCids, cid)
-				log.Debugf("error traversing DAG.  Adding to notFoundCids.  err=%v", err)
-				continue
-			}
+			ErrFunc:        nil,
+			SkipDuplicates: true,
+		})
+		if err != nil {
+			notFoundCids = append(notFoundCids, cid)
+			log.Debugf("error traversing DAG.  Adding to notFoundCids.  err=%v", err)
+			continue
 		}
 	}
 

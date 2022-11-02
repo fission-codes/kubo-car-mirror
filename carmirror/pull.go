@@ -124,7 +124,10 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 	p.cleanupRound = sameCids(pulledCids, pullRoots)
 
 	// Update remaining roots
-	pulledRemainingRoots, err := p.RemainingRoots(pullRoots)
+	localCidsAfterPull := p.UniqueLocalCids(pullRoots)
+	pulledRemainingRoots, err := p.RemainingRoots(localCidsAfterPull)
+	log.Debugf("localCidsAfterPull = %v", localCidsAfterPull)
+	log.Debugf("pulledRemainingRoots = %v", pulledRemainingRoots)
 	if err != nil {
 		return
 	}
@@ -201,39 +204,41 @@ func (p *Puller) UniqueLocalCids(rootCids []gocid.Cid) (cids []gocid.Cid) {
 	nodeGetter := mdag.NewSession(p.ctx, p.lng)
 
 	for _, cid := range rootCids {
-		if cidSet.Visit(cid) {
-			cids = append(cids, cid)
+		// cidSet.Add(cid)
+		// cids = append(cids, cid)
 
-			var rp path.Resolved
-			var nd ipld.Node
+		var rp path.Resolved
+		var nd ipld.Node
 
-			rp, err := p.capi.ResolvePath(p.ctx, path.New(cid.String()))
-			if err != nil {
-				continue
-			}
+		// TODO: return error
+		rp, err := p.capi.ResolvePath(p.ctx, path.New(cid.String()))
+		if err != nil {
+			log.Debugf("Failed to resolve path for cid %v.  Ignoring.  err = %v", cid.String(), err)
+			continue
+		}
 
-			nd, err = nodeGetter.Get(p.ctx, rp.Cid())
-			if err != nil {
-				continue
-			}
+		nd, err = nodeGetter.Get(p.ctx, rp.Cid())
+		if err != nil {
+			log.Debugf("Failed to get node for cid %v.  Ignoring.  err = %v", cid.String(), err)
+			continue
+		}
 
-			err = traverse.Traverse(nd, traverse.Options{
-				DAG:   nodeGetter,
-				Order: traverse.BFS, // Does order matter?
-				Func: func(current traverse.State) error {
-					if cidSet.Visit(current.Node.Cid()) {
-						cids = append(cids, current.Node.Cid())
-					}
+		err = traverse.Traverse(nd, traverse.Options{
+			DAG:   nodeGetter,
+			Order: traverse.BFS, // Does order matter?
+			Func: func(current traverse.State) error {
+				if cidSet.Visit(current.Node.Cid()) {
+					cids = append(cids, current.Node.Cid())
+				}
 
-					return nil
-				},
-				ErrFunc:        nil,
-				SkipDuplicates: true,
-			})
-			if err != nil {
-				log.Debugf("error traversing DAG for root CID %v.  err=%v", err)
-				continue
-			}
+				return nil
+			},
+			ErrFunc:        nil,
+			SkipDuplicates: true,
+		})
+		if err != nil {
+			log.Debugf("error traversing DAG for root CID %v.  err=%v", err)
+			continue
 		}
 	}
 
