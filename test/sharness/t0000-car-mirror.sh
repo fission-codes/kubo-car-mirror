@@ -202,6 +202,6 @@ test_expect_success "configure the plugin" '
 '
 
 run_push_test
-run_pull_test
+# run_pull_test
 
 test_done
