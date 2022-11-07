@@ -8,9 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/fission-codes/go-car-mirror/bloom"
-	"github.com/fission-codes/go-car-mirror/dag"
-	"github.com/fission-codes/go-car-mirror/payload"
+	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/kubo-car-mirror/dag"
+	"github.com/fission-codes/kubo-car-mirror/payload"
 	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"

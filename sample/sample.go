@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/fission-codes/go-car-mirror/bloom"
+	"github.com/fission-codes/kubo-car-mirror/bloom"
 )
 
 func main() {

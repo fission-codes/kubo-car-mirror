@@ -3,7 +3,7 @@ package bloom
 import (
 	"math"
 
-	"github.com/fission-codes/go-car-mirror/util"
+	"github.com/fission-codes/kubo-car-mirror/util"
 	"github.com/zeebo/xxh3"
 )
 

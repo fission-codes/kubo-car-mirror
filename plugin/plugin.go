@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	carmirror "github.com/fission-codes/go-car-mirror/carmirror"
+	carmirror "github.com/fission-codes/kubo-car-mirror/carmirror"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	plugin "github.com/ipfs/kubo/plugin"
@@ -23,7 +23,7 @@ type CarMirrorPlugin struct {
 	// A CarMirror struct
 	carmirror *carmirror.CarMirror
 	// Log level
-	LogLevel  string
+	LogLevel string
 	// HTTPCommandsAddr is the address CAR Mirror will listen on for local commands, which are application concerns.
 	// Defaults to `127.0.0.1:2502`.
 	HTTPCommandsAddr string

@@ -3,7 +3,7 @@ package carmirror
 import (
 	"context"
 
-	"github.com/fission-codes/go-car-mirror/bloom"
+	"github.com/fission-codes/kubo-car-mirror/bloom"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	mdag "github.com/ipfs/go-merkledag"

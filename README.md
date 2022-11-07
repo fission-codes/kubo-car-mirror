@@ -1,8 +1,8 @@
-![](https://github.com/fission-codes/go-car-mirror/raw/master/assets/logo.png?sanitize=true)
+![](https://github.com/fission-codes/kubo-car-mirror/raw/master/assets/logo.png?sanitize=true)
 
-# go-car-mirror
+# kubo-car-mirror
 
-[![CI](https://github.com/fission-codes/go-car-mirror/actions/workflows/main.yml/badge.svg)](https://github.com/fission-codes/go-car-mirror/actions/workflows/main.yml)
+[![CI](https://github.com/fission-codes/kubo-car-mirror/actions/workflows/main.yml/badge.svg)](https://github.com/fission-codes/kubo-car-mirror/actions/workflows/main.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/fission-codes/blob/master/LICENSE)
 [![Built by FISSION](https://img.shields.io/badge/⌘-Built_by_FISSION-purple.svg)](https://fission.codes)
 [![Discord](https://img.shields.io/discord/478735028319158273.svg)](https://discord.gg/zAQBDEq)
@@ -14,18 +14,18 @@ Go implementation of [CAR Mirror](https://github.com/fission-codes/spec/tree/mai
 
 ## Building
 
-go-car-mirror is implemented as a [Kubo Daemon Plugin](https://github.com/ipfs/kubo/blob/master/docs/plugins.md#daemon).
+kubo-car-mirror is implemented as a [Kubo Daemon Plugin](https://github.com/ipfs/kubo/blob/master/docs/plugins.md#daemon).
 In order to avoid package versioning issues common with Go plugins, it needs to be built in-tree with Kubo.
 
 We provide some make targets to simplify this process.
 
 ```
 # Clone repos to same parent directory
-git clone https://github.com/fission-codes/go-car-mirror
+git clone https://github.com/fission-codes/kubo-car-mirror
 git clone https://github.com/ipfs/kubo
 
-# Change to the go-car-mirror directory to run make targets
-cd go-car-mirror
+# Change to the kubo-car-mirror directory to run make targets
+cd kubo-car-mirror
 
 # Build everything, including the kubo plugin
 make build

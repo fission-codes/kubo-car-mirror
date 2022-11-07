@@ -20,7 +20,7 @@ var root = &cobra.Command{
 	Use:   "carmirror",
 	Short: "carmirror is a tool for efficiently diffing, deduplicating, packaging, and transmitting IPLD data from a source node",
 	Long: `Requires an IPFS plugin. More details:
-https://github.com/fission-codes/go-car-mirror`,
+https://github.com/fission-codes/kubo-car-mirror`,
 }
 
 // push
