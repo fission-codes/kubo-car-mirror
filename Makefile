@@ -16,11 +16,11 @@ build-core:
 setup-plugin:
 	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
 	echo "" >> ../kubo/plugin/loader/preload_list.tmp
-	echo "carmirror github.com/fission-codes/go-car-mirror/plugin *" >> ../kubo/plugin/loader/preload_list.tmp
+	echo "carmirror github.com/fission-codes/kubo-car-mirror/plugin *" >> ../kubo/plugin/loader/preload_list.tmp
 	mv ../kubo/plugin/loader/preload_list.tmp ../kubo/plugin/loader/preload_list
 	$(MAKE) -C ../kubo plugin/loader/preload.go
-	cd ../kubo && go mod edit -replace=github.com/fission-codes/go-car-mirror@v0.0.0-unpublished=../go-car-mirror
-	cd ../kubo && go get -d github.com/fission-codes/go-car-mirror@v0.0.0-unpublished
+	cd ../kubo && go mod edit -replace=github.com/fission-codes/kubo-car-mirror@v0.0.0-unpublished=../kubo-car-mirror
+	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror@v0.0.0-unpublished
 	cd ../kubo && go mod tidy
 
 build-plugin: setup-plugin

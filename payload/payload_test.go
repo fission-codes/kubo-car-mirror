@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/fission-codes/go-car-mirror/bloom"
+	"github.com/fission-codes/kubo-car-mirror/bloom"
 	"gotest.tools/assert"
 )
 

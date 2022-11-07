@@ -1,7 +1,7 @@
 package main
 
 import (
-	plugin "github.com/fission-codes/go-car-mirror/plugin"
+	plugin "github.com/fission-codes/kubo-car-mirror/plugin"
 )
 
 var Plugins = plugin.Plugins

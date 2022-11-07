@@ -1,4 +1,4 @@
-module github.com/fission-codes/go-car-mirror
+module github.com/fission-codes/kubo-car-mirror
 
 go 1.17
 

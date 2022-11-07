@@ -3,8 +3,8 @@ package bloom
 import (
 	"math"
 
-	"github.com/fission-codes/go-car-mirror/bitset"
-	"github.com/fission-codes/go-car-mirror/util"
+	"github.com/fission-codes/kubo-car-mirror/bitset"
+	"github.com/fission-codes/kubo-car-mirror/util"
 )
 
 type Filter struct {
