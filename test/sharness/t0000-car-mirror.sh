@@ -163,8 +163,11 @@ run_push_test() {
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
-    iptb stop && iptb_wait_stop
+    iptb stop
   '
+  # test_expect_success "shut down nodes" '
+  #   iptb stop && iptb_wait_stop
+  # '
 }
 
 run_pull_test() {
@@ -189,8 +192,11 @@ run_pull_test() {
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
-    iptb stop && iptb_wait_stop
+    iptb stop
   '
+  # test_expect_success "shut down nodes" '
+  #   iptb stop && iptb_wait_stop
+  # '
 }
 
 test_expect_success "set up testbed" '
@@ -202,6 +208,6 @@ test_expect_success "configure the plugin" '
 '
 
 run_push_test
-# run_pull_test
+run_pull_test
 
 test_done
