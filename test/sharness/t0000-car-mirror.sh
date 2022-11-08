@@ -122,7 +122,7 @@ check_not_has_cid_root() {
   node=$1
   cid=$2
 
-  test_expect_success "node $node can get cid root $cid" '
+  test_expect_success "node $node can not get cid root $cid" '
     ipfsi $node get $cid --offline >/dev/null 2> get_error
     test_should_contain "block was not found locally" get_error
   '
@@ -147,9 +147,9 @@ run_push_test() {
   check_has_cid_root 0 $ROOT_CID
   check_not_has_cid_root 1 $ROOT_CID
 
-  test_expect_success "can push from node 0 to node 1" "
-    carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
-  "
+  # test_expect_success "can push from node 0 to node 1" "
+  #   carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
+  # "
   
   iptb logs 0
   iptb logs 1
@@ -163,11 +163,8 @@ run_push_test() {
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
-    iptb stop
+    iptb stop && iptb_wait_stop
   '
-  # test_expect_success "shut down nodes" '
-  #   iptb stop && iptb_wait_stop
-  # '
 }
 
 run_pull_test() {
@@ -192,11 +189,8 @@ run_pull_test() {
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
-    iptb stop
+    iptb stop && iptb_wait_stop
   '
-  # test_expect_success "shut down nodes" '
-  #   iptb stop && iptb_wait_stop
-  # '
 }
 
 test_expect_success "set up testbed" '
@@ -208,6 +202,6 @@ test_expect_success "configure the plugin" '
 '
 
 run_push_test
-run_pull_test
+# run_pull_test
 
 test_done
