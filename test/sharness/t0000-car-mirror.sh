@@ -147,9 +147,9 @@ run_push_test() {
   check_has_cid_root 0 $ROOT_CID
   check_not_has_cid_root 1 $ROOT_CID
 
-  # test_expect_success "can push from node 0 to node 1" "
-  #   carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
-  # "
+  test_expect_success "can push from node 0 to node 1" "
+    carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
+  "
   
   iptb logs 0
   iptb logs 1
