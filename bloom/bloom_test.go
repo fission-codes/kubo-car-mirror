@@ -162,6 +162,11 @@ func TestFPP(t *testing.T) {
 	if EstimateFPP(1000000) != float64(1)/float64(1_000_000) {
 		t.Errorf("EstimateFPP(1000000) should be 1/1000000")
 	}
+
+	v := EstimateFPP(0)
+	if v != 0 {
+		t.Errorf("EstimateFPP(0) should be 0, got %v", v)
+	}
 }
 
 func TestLargeNotPowerOfTwo(t *testing.T) {

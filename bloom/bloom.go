@@ -48,8 +48,13 @@ func NewFilterWithEstimates(n uint64, fpp float64) *Filter {
 
 // EstimateFPP returns FPP as one order of magnitude (OOM) under the inverse of the order of magnitude of the number of inserted elements.
 // For instance, if there are some 100ks of elements in the filter, then the FPP should be 1/1M.
+// TODO: What should we do with 0?
 func EstimateFPP(n uint64) float64 {
-	return 1 / math.Pow10(int(math.Round(math.Log10(float64(n)))))
+	if n == 0 {
+		return 0.0
+	} else {
+		return 1 / math.Pow10(int(math.Round(math.Log10(float64(n)))))
+	}
 }
 
 // BitCount returns the filter size in bits.
