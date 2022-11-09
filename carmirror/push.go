@@ -3,7 +3,7 @@ package carmirror
 import (
 	"context"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	mdag "github.com/ipfs/go-merkledag"
@@ -189,8 +189,8 @@ func (p *Pusher) DoPush(remainingRoots []gocid.Cid, includeBloom bool) (pushCids
 			// Cold start.  Create bloom of remainingCids for payload
 			// TODO: If we have all cids locally underneath the root and if we don't have a diff param, no bloom is needed.
 			n := uint64(len(remainingCids))
-			// providerGraphEstimate = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
-			providerGraphEstimate = bloom.NewFilterWithEstimates(n, 0.001)
+			providerGraphEstimate = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+			// providerGraphEstimate = bloom.NewFilterWithEstimates(n, 0.001)
 			for _, cid := range remainingCids {
 				providerGraphEstimate.Add(cid.Bytes())
 			}

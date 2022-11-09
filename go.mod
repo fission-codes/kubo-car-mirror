@@ -1,6 +1,6 @@
 module github.com/fission-codes/kubo-car-mirror
 
-go 1.17
+go 1.18
 
 require (
 	bazil.org/fuse v0.0.0-20200117225306-7b5117fecadc // indirect
@@ -9,6 +9,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5 // indirect
+	github.com/fission-codes/go-bloom v0.0.0-20221109192040-724e7cab8459
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/ipfs/go-bitswap v0.8.0 // indirect
@@ -71,7 +72,7 @@ require (
 	github.com/multiformats/go-multicodec v0.5.0 // indirect
 	github.com/multiformats/go-multihash v0.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/common v0.35.0 // indirect
 	github.com/wI2L/jsondiff v0.2.0 // indirect
@@ -92,7 +93,6 @@ require (
 	github.com/ipfs/kubo v0.14.0
 	github.com/ipld/go-car v0.4.0
 	github.com/spf13/cobra v0.0.5
-	github.com/zeebo/xxh3 v1.0.2
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -114,6 +114,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
+	github.com/fission-codes/go-bitset v0.0.0-20221109185446-f89ba214d272 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
@@ -197,6 +198,7 @@ require (
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect

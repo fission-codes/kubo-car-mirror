@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
 	"github.com/fission-codes/kubo-car-mirror/payload"
 	"github.com/ipfs/go-cid"
@@ -212,8 +212,8 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			return
 		}
 		n := uint64(len(bloomCids) * 8)
-		// providerGraphConfirmation = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
-		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.001)
+		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+		// providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.001)
 		for _, cid := range bloomCids {
 			providerGraphConfirmation.Add(cid.Bytes())
 		}

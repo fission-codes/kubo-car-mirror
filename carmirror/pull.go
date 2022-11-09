@@ -3,7 +3,7 @@ package carmirror
 import (
 	"context"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
@@ -96,8 +96,8 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 		if p.currentRound == 0 {
 			bloomCids := p.UniqueLocalCids(append(p.pullRoots, p.sharedRoots...))
 			n := uint64(len(bloomCids))
-			// p.bloom = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
-			p.bloom = bloom.NewFilterWithEstimates(n, 0.001)
+			p.bloom = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+			// p.bloom = bloom.NewFilterWithEstimates(n, 0.001)
 			for _, cid := range bloomCids {
 				p.bloom.Add(cid.Bytes())
 			}

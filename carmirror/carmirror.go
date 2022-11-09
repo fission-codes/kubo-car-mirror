@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
