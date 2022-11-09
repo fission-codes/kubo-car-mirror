@@ -96,7 +96,8 @@ func (p *Puller) DoPull(roots []gocid.Cid, includeBloom bool) (pullCids []gocid.
 		if p.currentRound == 0 {
 			bloomCids := p.UniqueLocalCids(append(p.pullRoots, p.sharedRoots...))
 			n := uint64(len(bloomCids))
-			p.bloom = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+			// p.bloom = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+			p.bloom = bloom.NewFilterWithEstimates(n, 0.001)
 			for _, cid := range bloomCids {
 				p.bloom.Add(cid.Bytes())
 			}

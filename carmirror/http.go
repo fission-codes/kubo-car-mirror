@@ -212,7 +212,8 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			return
 		}
 		n := uint64(len(bloomCids) * 8)
-		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+		// providerGraphConfirmation = bloom.NewFilterWithEstimates(n, bloom.EstimateFPP(n))
+		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.001)
 		for _, cid := range bloomCids {
 			providerGraphConfirmation.Add(cid.Bytes())
 		}
