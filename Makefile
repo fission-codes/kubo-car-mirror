@@ -28,6 +28,9 @@ build-plugin: setup-plugin
 
 build: build-core build-plugin
 
+build-docker:
+	cd .. && docker build -t kubo-car-mirror -f kubo-car-mirror/Dockerfile .
+
 test: test-unit sharness
 
 test-unit:
