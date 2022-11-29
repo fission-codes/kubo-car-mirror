@@ -34,9 +34,9 @@ jobs:
           go env
       - name: Build
         run: make build build-plugin
-      - name: Run tests
-        run: make test
+      - name: Run unit tests
+        run: make test-unit
       - name: Check formatted
         run: gofmt -l .
-      - name: Run sharness tests
-        run: make sharness-v
+      # - name: Run sharness tests
+      #   run: make sharness-v
