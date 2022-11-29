@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
 	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
@@ -38,7 +38,8 @@ var (
 
 // or pushable, pullable?
 type CarMirrorable interface {
-	Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error)
+	Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter[[]byte, bloom.HashFunction[[]byte]], diff string) (providerGraphConfirmation *bloom.Filter[[]byte, bloom.HashFunction[[]byte]], subgraphRoots []gocid.Cid, err error)
+	// Push(ctx context.Context, cids []gocid.Cid, filter *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error)
 	Pull(ctx context.Context, cids []gocid.Cid) (err error)
 	// NewSession() (id string, err error)
 	// New

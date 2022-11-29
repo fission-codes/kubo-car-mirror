@@ -1,6 +1,6 @@
 module github.com/fission-codes/kubo-car-mirror
 
-go 1.17
+go 1.18
 
 require (
 	bazil.org/fuse v0.0.0-20200117225306-7b5117fecadc // indirect
@@ -71,7 +71,7 @@ require (
 	github.com/multiformats/go-multicodec v0.5.0 // indirect
 	github.com/multiformats/go-multihash v0.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/common v0.35.0 // indirect
 	github.com/wI2L/jsondiff v0.2.0 // indirect
@@ -84,10 +84,11 @@ require (
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220804214406-8e32c043e418 // indirect
+	golang.org/x/sys v0.2.0 // indirect
 )
 
 require (
+	github.com/fission-codes/go-bloom v0.0.0-20221121164820-3e06639fdbc0
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/ipfs/kubo v0.14.0
 	github.com/ipld/go-car v0.4.0
@@ -114,6 +115,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
+	github.com/fission-codes/go-bitset v0.0.0-20221117212908-fdb519e34c69 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
@@ -142,7 +144,7 @@ require (
 	github.com/ipld/edelweiss v0.1.4 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/klauspost/compress v1.15.1 // indirect
-	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.1 // indirect
 	github.com/koron/go-ssdp v0.0.3 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
