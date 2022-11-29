@@ -1,4 +1,4 @@
-package carmirror
+package oldcarmirror
 
 import (
 	ipld "github.com/ipfs/go-ipld-format"
