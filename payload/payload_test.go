@@ -4,13 +4,16 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
+	"github.com/zeebo/xxh3"
 	"gotest.tools/assert"
 )
 
 func TestEncodeDecode(t *testing.T) {
 
-	f := bloom.NewFilter(128, 6)
+	var function bloom.HashFunction[[]byte] = xxh3.HashSeed
+
+	f, _ := bloom.NewFilter(uint64(128), uint64(6), function)
 	f.Add([]byte("one"))
 	f.Add([]byte("two"))
 	f.Add([]byte("three"))

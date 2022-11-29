@@ -8,13 +8,14 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	"github.com/fission-codes/kubo-car-mirror/dag"
 	"github.com/fission-codes/kubo-car-mirror/payload"
 	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/zeebo/xxh3"
 )
 
 var (
@@ -35,7 +36,7 @@ const (
 	cborMIMEType                  = "application/cbor"
 )
 
-func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEstimate *bloom.Filter, diff string) (providerGraphConfirmation *bloom.Filter, subgraphRoots []gocid.Cid, err error) {
+func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEstimate *bloom.Filter[[]byte, bloom.HashFunction[[]byte]], diff string) (providerGraphConfirmation *bloom.Filter[[]byte, bloom.HashFunction[[]byte]], subgraphRoots []gocid.Cid, err error) {
 	log.Debugf("HTTPClient.Push")
 
 	var b bytes.Buffer
@@ -98,7 +99,7 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 		return
 	}
 
-	providerGraphConfirmation = bloom.NewFilterFromBloomBytes(uint64(len(pushProvider.BB)*8), uint64(pushProvider.BK), pushProvider.BB)
+	providerGraphConfirmation = bloom.NewFilterFromBloomBytes[[]byte, bloom.HashFunction[[]byte]](uint64(len(pushProvider.BB)*8), uint64(pushProvider.BK), pushProvider.BB, xxh3.HashSeed)
 	if err != nil {
 		return
 	}
@@ -204,7 +205,7 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 		// (relative to the CIDs in the push? Or in the diff?)  For all CIDs pushed for the entire session or the request?
 
 		// Start with subgraphRoots
-		var providerGraphConfirmation *bloom.Filter
+		var providerGraphConfirmation *bloom.Filter[[]byte, bloom.HashFunction[[]byte]]
 		bloomCids, err := cm.GetLocalCids(r.Context(), subgraphRoots)
 		if err != nil {
 			w.Write([]byte(err.Error()))
@@ -212,7 +213,13 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			return
 		}
 		n := uint64(len(bloomCids) * 8)
-		providerGraphConfirmation = bloom.NewFilterWithEstimates(n, 0.0001)
+		providerGraphConfirmation, err = bloom.NewFilterWithEstimates[[]byte, bloom.HashFunction[[]byte]](n, 0.0001, xxh3.HashSeed)
+		if err != nil {
+			log.Debugf("error in bloom.NewFilterWithEstimates: err=%v", err.Error())
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		for _, cid := range bloomCids {
 			providerGraphConfirmation.Add(cid.Bytes())
 		}

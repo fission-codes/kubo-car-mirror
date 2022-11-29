@@ -3,7 +3,7 @@ package carmirror
 import (
 	"context"
 
-	"github.com/fission-codes/kubo-car-mirror/bloom"
+	"github.com/fission-codes/go-bloom"
 	gocid "github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	mdag "github.com/ipfs/go-merkledag"
@@ -11,6 +11,7 @@ import (
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/pkg/errors"
+	"github.com/zeebo/xxh3"
 )
 
 type Pusher struct {
@@ -26,7 +27,7 @@ type Pusher struct {
 	maxBlocksPerRound         int64
 	maxBlocksPerColdCall      int64
 	currentRound              int64
-	providerGraphConfirmation *bloom.Filter
+	providerGraphConfirmation *bloom.Filter[[]byte, bloom.HashFunction[[]byte]]
 	// cidsSeen hashmap
 	// remoteBloom
 }
@@ -183,13 +184,18 @@ func (p *Pusher) DoPush(remainingRoots []gocid.Cid, includeBloom bool) (pushCids
 	log.Debugf("remainingCids=%v", remainingCids)
 	log.Debugf("remainingRoots=%v", remainingRoots)
 
-	var providerGraphEstimate *bloom.Filter
+	var providerGraphEstimate *bloom.Filter[[]byte, bloom.HashFunction[[]byte]]
 	if includeBloom {
 		if p.currentRound == 0 {
 			// Cold start.  Create bloom of remainingCids for payload
 			// TODO: If we have all cids locally underneath the root and if we don't have a diff param, no bloom is needed.
 			n := uint64(len(remainingCids))
-			providerGraphEstimate = bloom.NewFilterWithEstimates(n, 0.0001)
+			var function bloom.HashFunction[[]byte] = xxh3.HashSeed
+
+			providerGraphEstimate, err = bloom.NewFilterWithEstimates(n, 0.0001, function)
+			if err != nil {
+				return nil, errors.Wrapf(err, "unable to create new filter")
+			}
 			for _, cid := range remainingCids {
 				providerGraphEstimate.Add(cid.Bytes())
 			}
