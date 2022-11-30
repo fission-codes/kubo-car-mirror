@@ -1,4 +1,4 @@
-package carmirror
+package oldcarmirror
 
 import (
 	"bufio"
@@ -9,8 +9,6 @@ import (
 	"net/http"
 
 	"github.com/fission-codes/go-bloom"
-	"github.com/fission-codes/kubo-car-mirror/dag"
-	"github.com/fission-codes/kubo-car-mirror/payload"
 	"github.com/ipfs/go-cid"
 	gocid "github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
@@ -51,13 +49,13 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 	w.Flush()
 
 	// TODO: conditional providerGraphEstimate logic, might be nil
-	var pl payload.PushRequestor
+	var pl PushRequestor
 	if providerGraphEstimate != nil {
-		pl = payload.PushRequestor{BB: providerGraphEstimate.Bytes(), BK: uint(providerGraphEstimate.HashCount()), PL: b.Bytes()}
+		pl = PushRequestor{BB: providerGraphEstimate.Bytes(), BK: uint(providerGraphEstimate.HashCount()), PL: b.Bytes()}
 	} else {
-		pl = payload.PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
+		pl = PushRequestor{BB: nil, BK: 0, PL: b.Bytes()}
 	}
-	plBytes, err := payload.CborEncode(pl)
+	plBytes, err := CborEncode(pl)
 	if err != nil {
 		log.Debugf("error while encoding payload in cbor: err=%v", err.Error())
 		return
@@ -89,12 +87,12 @@ func (rem *HTTPClient) Push(ctx context.Context, cids []cid.Cid, providerGraphEs
 		return
 	}
 
-	var pushProvider payload.PushProvider
-	if err = payload.CborDecode(resBytes, &pushProvider); err != nil {
+	var pushProvider PushProvider
+	if err = CborDecode(resBytes, &pushProvider); err != nil {
 		return
 	}
 
-	subgraphRoots, err = dag.ParseCids(pushProvider.SR)
+	subgraphRoots, err = ParseCids(pushProvider.SR)
 	if err != nil {
 		return
 	}
@@ -113,8 +111,8 @@ func (rem *HTTPClient) Pull(ctx context.Context, cids []cid.Cid) error {
 	for i, c := range cids {
 		cidStrs[i] = c.String()
 	}
-	pullRequest := payload.PullRequestor{RS: cidStrs, BK: 0, BB: nil}
-	plBytes, err := payload.CborEncode(pullRequest)
+	pullRequest := PullRequestor{RS: cidStrs, BK: 0, BB: nil}
+	plBytes, err := CborEncode(pullRequest)
 	if err != nil {
 		return err
 	}
@@ -171,8 +169,8 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 			return
 		}
 
-		var pushRequest payload.PushRequestor
-		if err := payload.CborDecode(data, &pushRequest); err != nil {
+		var pushRequest PushRequestor
+		if err := CborDecode(data, &pushRequest); err != nil {
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -225,9 +223,9 @@ func (cm *CarMirror) HTTPRemotePushHandler() http.HandlerFunc {
 		}
 
 		// On success, return the PushProviderPayload, for now with nothing of interest
-		pushProvider := payload.PushProvider{SR: subgraphRootsStr, BK: uint(providerGraphConfirmation.HashCount()), BB: providerGraphConfirmation.Bytes()}
+		pushProvider := PushProvider{SR: subgraphRootsStr, BK: uint(providerGraphConfirmation.HashCount()), BB: providerGraphConfirmation.Bytes()}
 		log.Debugf("pushProvider=%v", pushProvider)
-		pushProviderBytes, err := payload.CborEncode(pushProvider)
+		pushProviderBytes, err := CborEncode(pushProvider)
 		if err != nil {
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -287,8 +285,8 @@ func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
 			return
 		}
 
-		var pullRequest payload.PullRequestor
-		if err := payload.CborDecode(data, &pullRequest); err != nil {
+		var pullRequest PullRequestor
+		if err := CborDecode(data, &pullRequest); err != nil {
 			log.Debugf("could not decode cbor")
 			w.Write([]byte(err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -296,7 +294,7 @@ func (cm *CarMirror) HTTPRemotePullHandler() http.HandlerFunc {
 		}
 
 		cidStrs := pullRequest.RS
-		cids, err := dag.ParseCids(cidStrs)
+		cids, err := ParseCids(cidStrs)
 		if err != nil {
 			log.Debugf("could not parse cids: cidStrs=%v", cidStrs)
 			w.Write([]byte(err.Error()))

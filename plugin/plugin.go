@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	carmirror "github.com/fission-codes/kubo-car-mirror/carmirror"
+	// "github.com/fission-codes/kubo-car-mirror/oldcarmirror"
+	"github.com/fission-codes/kubo-car-mirror/carmirror"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	plugin "github.com/ipfs/kubo/plugin"
@@ -107,8 +108,8 @@ func (p *CarMirrorPlugin) listenLocalCommands() error {
 	// That is an application concern, not protocol, and we've decided to initiate the request
 	// via a request to the endpoints below.  Once a request for a new push or pull session has been received,
 	// the running CAR Mirror server can then handle the protocol level concerns.
-	m.Handle("/dag/push/new", p.carmirror.NewPushSessionHandler())
-	m.Handle("/dag/pull/new", p.carmirror.NewPullSessionHandler())
+	// m.Handle("/dag/push/new", p.carmirror.NewPushSessionHandler())
+	// m.Handle("/dag/pull/new", p.carmirror.NewPullSessionHandler())
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 
