@@ -23,7 +23,7 @@ func (ks *KuboStore) Get(ctx context.Context, cid cmipld.Cid) (*cmipld.Block, er
 }
 
 func (ks *KuboStore) Has(ctx context.Context, cid cmipld.Cid) (bool, error) {
-	if node, err := ks.store.Get(ctx, cid.Unwrap()); err != nil {
+	if _, err := ks.store.Get(ctx, cid.Unwrap()); err != nil {
 		return false, nil
 	} else {
 		return true, nil
