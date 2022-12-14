@@ -3,18 +3,27 @@ package carmirror
 import (
 	"context"
 
-	cmipld "github.com/fission-codes/go-car-mirror/ipfs"
+	cm "github.com/fission-codes/go-car-mirror/carmirror"
+	cmipld "github.com/fission-codes/go-car-mirror/ipld"
+	blocks "github.com/ipfs/go-block-format"
 	ipld "github.com/ipfs/go-ipld-format"
-	ipfs "github.com/ipfs/interface-go-ipfs-core"
+	kubo "github.com/ipfs/interface-go-ipfs-core"
 	opts "github.com/ipfs/interface-go-ipfs-core/options"
 )
 
 type KuboStore struct {
 	store ipld.DAGService
-	pins  ipfs.PinAPI
+	pins  kubo.PinAPI
 }
 
-func (ks *KuboStore) Get(ctx context.Context, cid cmipld.Cid) (*cmipld.Block, error) {
+func NewKuboStore(core kubo.CoreAPI) *KuboStore {
+	return &KuboStore{
+		core.Dag(),
+		core.Pin(),
+	}
+}
+
+func (ks *KuboStore) Get(ctx context.Context, cid cmipld.Cid) (cm.Block[cmipld.Cid], error) {
 	if node, err := ks.store.Get(ctx, cid.Unwrap()); err != nil {
 		return nil, err
 	} else {
@@ -30,8 +39,18 @@ func (ks *KuboStore) Has(ctx context.Context, cid cmipld.Cid) (bool, error) {
 	}
 }
 
-func (ks *KuboStore) Add(ctx context.Context, block *cmipld.RawBlock) (*cmipld.Block, error) {
-	if node, err := ipld.DefaultBlockDecoder.Decode(block); err != nil {
+func (ks *KuboStore) Add(ctx context.Context, block cm.RawBlock[cmipld.Cid]) (cm.Block[cmipld.Cid], error) {
+	var ipfsBlock blocks.Block
+	if cmBlock, ok := block.(*cmipld.RawBlock); ok {
+		ipfsBlock = cmBlock.Unwrap()
+	} else {
+		if basicBlock, err := blocks.NewBlockWithCid(block.RawData(), block.Id().Unwrap()); err != nil {
+			return nil, err
+		} else {
+			ipfsBlock = basicBlock
+		}
+	}
+	if node, err := ipld.DefaultBlockDecoder.Decode(ipfsBlock); err != nil {
 		return nil, err
 	} else {
 		if err := ks.store.Add(ctx, node); err != nil {
