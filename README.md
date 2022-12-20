@@ -140,11 +140,8 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 # Configure port for remotely accessible commands (i.e. the actual protocol commands)
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '":2503"'
 
-# Configure max blocks to send for cold calls
-../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerColdCall 100
-
-# Configure max blocks to send per round
-../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerRound 200
+# Configure max batch size
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBatchSize 32
 
 # Disable the plugin
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Disabled true

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	ipld "github.com/ipfs/go-ipld-format"
+	cmhttp "github.com/fission-codes/go-car-mirror/http"
+	cmipld "github.com/fission-codes/go-car-mirror/ipld"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
-	options "github.com/ipfs/interface-go-ipfs-core/options"
 )
 
 const Version = "0.1.0"
@@ -19,14 +19,17 @@ type CarMirror struct {
 	// CAR Mirror config
 	cfg *Config
 
-	// Local node getter
-	lng ipld.NodeGetter
-
 	// CoreAPI
 	capi coreiface.CoreAPI
 
-	// Local block API
-	bapi coreiface.BlockAPI
+	// Block store
+	blockStore *KuboStore
+
+	// HTTP client for CAR Mirror requests
+	client *cmhttp.Client[cmipld.Cid, *cmipld.Cid]
+
+	// HTTP server for CAR Mirror requests
+	server *cmhttp.Server[cmipld.Cid, *cmipld.Cid]
 
 	// HTTP server accepting CAR Mirror requests
 	httpServer *http.Server
@@ -34,9 +37,8 @@ type CarMirror struct {
 
 // Config encapsulates CAR Mirror configuration
 type Config struct {
-	HTTPRemoteAddr       string
-	MaxBlocksPerRound    int64
-	MaxBlocksPerColdCall int64
+	HTTPRemoteAddr string
+	MaxBatchSize   uint32
 }
 
 // Validate confirms the configuration is valid
@@ -45,23 +47,15 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("HTTPRemoteAddr is required")
 	}
 
-	if cfg.MaxBlocksPerColdCall < 1 {
-		return fmt.Errorf("MaxBlocksPerColdCall must be a positive number")
-	}
-
-	if cfg.MaxBlocksPerRound < 1 {
-		return fmt.Errorf("MaxBlocksPerRound must be a positive number")
+	if cfg.MaxBatchSize < 1 {
+		return fmt.Errorf("MaxBatchSize must be a positive number")
 	}
 
 	return nil
 }
 
 // New creates a local CAR Mirror service.
-//
-// Its crucial that the NodeGetter passed to New be an offline-only getter.
-// If using IPFS, this package defines a helper function: NewLocalNodeGetter
-// to get an offline-only node getter from an IPFS CoreAPI interface.
-func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreiface.BlockAPI, opts ...func(cfg *Config)) (*CarMirror, error) {
+func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config)) (*CarMirror, error) {
 	// Add default stuff to the config
 	cfg := &Config{}
 
@@ -73,11 +67,17 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 		return nil, err
 	}
 
+	cmConfig := cmhttp.Config{
+		MaxBatchSize: cfg.MaxBatchSize,
+		Address:      cfg.HTTPRemoteAddr,
+	}
+
 	cm := &CarMirror{
-		cfg:  cfg,
-		lng:  localNodes,
-		capi: capi,
-		bapi: blockStore,
+		cfg:        cfg,
+		capi:       capi,
+		blockStore: blockStore,
+		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmConfig),
+		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmConfig),
 	}
 
 	if cfg.HTTPRemoteAddr != "" {
@@ -112,13 +112,4 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 
 	log.Debug("CAR Mirror remote started")
 	return nil
-}
-
-// NewLocalNodeGetter creates a local (no fetch) NodeGetter from a CoreAPI.
-func NewLocalNodeGetter(api coreiface.CoreAPI) (ipld.NodeGetter, error) {
-	noFetchBlocks, err := api.WithOptions(options.Api.FetchBlocks(false))
-	if err != nil {
-		return nil, err
-	}
-	return noFetchBlocks.Dag(), nil
 }
