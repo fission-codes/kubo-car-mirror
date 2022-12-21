@@ -12,7 +12,7 @@ import (
 	plugin "github.com/ipfs/kubo/plugin"
 )
 
-var log = golog.Logger("car-mirror")
+var log = golog.Logger("kubo-car-mirror")
 
 // Plugins is an exported list of plugins that will be loaded by kubo
 var Plugins = []plugin.Plugin{

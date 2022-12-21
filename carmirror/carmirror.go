@@ -80,34 +80,23 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmConfig),
 	}
 
-	if cfg.HTTPRemoteAddr != "" {
-		m := http.NewServeMux()
-		// m.Handle("/dag/push", cm.HTTPRemotePushHandler())
-		// m.Handle("/dag/pull", cm.HTTPRemotePullHandler())
-
-		cm.httpServer = &http.Server{
-			Addr:    cfg.HTTPRemoteAddr,
-			Handler: m,
-		}
-	}
-
 	return cm, nil
 }
 
 func (cm *CarMirror) StartRemote(ctx context.Context) error {
-	if cm.httpServer == nil {
+	if cm.server == nil {
 		return fmt.Errorf("CAR Mirror is not configured as a remote")
 	}
 
 	go func() {
 		<-ctx.Done()
-		if cm.httpServer != nil {
-			cm.httpServer.Close()
+		if cm.server != nil {
+			cm.server.Stop()
 		}
 	}()
 
-	if cm.httpServer != nil {
-		go cm.httpServer.ListenAndServe()
+	if cm.server != nil {
+		go cm.server.Start()
 	}
 
 	log.Debug("CAR Mirror remote started")

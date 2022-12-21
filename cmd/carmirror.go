@@ -13,7 +13,7 @@ var (
 	defaultCmdAddr = "http://localhost:2502"
 )
 
-var log = golog.Logger("car-mirror")
+var log = golog.Logger("kubo-car-mirror")
 
 // root command
 var root = &cobra.Command{
