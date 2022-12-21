@@ -5,15 +5,28 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
+	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/zeebo/xxh3"
 )
 
 const Version = "0.1.0"
 
 var log = golog.Logger("kubo-car-mirror")
+
+const HASH_FUNCTION = 3
+
+func init() {
+	filter.RegisterHash(3, XX3HashBlockId)
+}
+
+func XX3HashBlockId(id cmipld.Cid, seed uint64) uint64 {
+	return xxh3.HashSeed(id.Bytes(), seed)
+}
 
 type CarMirror struct {
 	// CAR Mirror config
@@ -68,8 +81,9 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 	}
 
 	cmConfig := cmhttp.Config{
-		MaxBatchSize: cfg.MaxBatchSize,
-		Address:      cfg.HTTPRemoteAddr,
+		MaxBatchSize:  cfg.MaxBatchSize,
+		Address:       cfg.HTTPRemoteAddr,
+		BloomFunction: HASH_FUNCTION,
 	}
 
 	cm := &CarMirror{
@@ -101,4 +115,88 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 
 	log.Debug("CAR Mirror remote started")
 	return nil
+}
+
+type PushParams struct {
+	Cid    string
+	Addr   string
+	Diff   string
+	Stream bool
+}
+
+func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PushParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Diff:   r.FormValue("diff"),
+				Stream: r.FormValue("stream") == "true",
+			}
+			log.Debugw("NewPushSessionHandler", "params", p)
+
+			// Parse the CID
+			cid, err := gocid.Parse(p.Cid)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			// Initiate the push
+			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+		}
+	})
+}
+
+type PullParams struct {
+	Cid    string
+	Addr   string
+	Stream bool
+}
+
+func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PullParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Stream: r.FormValue("stream") == "true",
+			}
+			log.Debugw("NewPullSessionHandler", "params", p)
+		}
+	})
+}
+
+type LsParams struct {
+}
+
+func (cm *CarMirror) LsHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := LsParams{}
+			log.Debugw("LsHandler", "params", p)
+		}
+	})
+}
+
+type CloseParams struct {
+}
+
+func (cm *CarMirror) CloseHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := CloseParams{}
+			log.Debugw("CloseHandler", "params", p)
+		}
+	})
 }

@@ -56,7 +56,7 @@ func (*CarMirrorPlugin) Version() string {
 }
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
-	log.Debugf("Init")
+	log.Debugw("CarMirrorPlugin", "method", "Init")
 	p.loadConfig(env.Config)
 
 	// Only set default log level if env var isn't set
@@ -68,7 +68,7 @@ func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 }
 
 func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
-	log.Debugf("Start")
+	log.Debugw("CarMirrorPlugin", "method", "Start")
 
 	clientBlockStore := carmirror.NewKuboStore(capi)
 
@@ -93,18 +93,16 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 }
 
 func (p *CarMirrorPlugin) Close() error {
-	log.Debugf("Close")
+	log.Debugw("CarMirrorPlugin", "method", "Close")
 	return nil
 }
 
 func (p *CarMirrorPlugin) listenLocalCommands() error {
 	m := http.NewServeMux()
-	// The CAR Mirror spec doesn't specify how a user initiates a new session.
-	// That is an application concern, not protocol, and we've decided to initiate the request
-	// via a request to the endpoints below.  Once a request for a new push or pull session has been received,
-	// the running CAR Mirror server can then handle the protocol level concerns.
-	// m.Handle("/dag/push/new", p.carmirror.NewPushSessionHandler())
-	// m.Handle("/dag/pull/new", p.carmirror.NewPullSessionHandler())
+	m.Handle("/push/new", p.carmirror.NewPushSessionHandler())
+	m.Handle("/pull/new", p.carmirror.NewPullSessionHandler())
+	m.Handle("/ls", p.carmirror.LsHandler())
+	m.Handle("/close", p.carmirror.CloseHandler())
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 

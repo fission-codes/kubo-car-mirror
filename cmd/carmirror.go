@@ -35,9 +35,9 @@ var push = &cobra.Command{
 		var endpoint string
 		if len(args) == 3 {
 			diff := args[2]
-			endpoint = fmt.Sprintf("/dag/push/new?cid=%s&addr=%s&diff=%s", cid, addr, diff)
+			endpoint = fmt.Sprintf("push/new?cid=%s&addr=%s&diff=%s", cid, addr, diff)
 		} else {
-			endpoint = fmt.Sprintf("/dag/push/new?cid=%s&addr=%s", cid, addr)
+			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s", cid, addr)
 		}
 
 		res, err := doRemoteHTTPReq("POST", endpoint)

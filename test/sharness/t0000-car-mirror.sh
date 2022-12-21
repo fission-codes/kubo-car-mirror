@@ -122,7 +122,7 @@ check_not_has_cid_root() {
   node=$1
   cid=$2
 
-  test_expect_success "node $node can get cid root $cid" '
+  test_expect_success "node $node can not get cid root $cid" '
     ipfsi $node get $cid --offline >/dev/null 2> get_error
     test_should_contain "block was not found locally" get_error
   '
@@ -135,32 +135,28 @@ ROOT_CID=QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 run_push_test() {
   startup_cluster_disconnected 2 "$@"
 
-  # test_expect_success "clean repo before test" '
-  #   ipfsi 0 repo gc > /dev/null &&
-  #   ipfsi 1 repo gc > /dev/null
-  # '
+  test_expect_success "clean repo before test" '
+    ipfsi 0 repo gc > /dev/null &&
+    ipfsi 1 repo gc > /dev/null
+  '
 
-  # test_expect_success "import test CAR file on node 0" '
-  #   ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
-  # '
+  test_expect_success "import test CAR file on node 0" '
+    ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
+  '
 
-  # check_has_cid_root 0 $ROOT_CID
-  # check_not_has_cid_root 1 $ROOT_CID
+  check_has_cid_root 0 $ROOT_CID
+  check_not_has_cid_root 1 $ROOT_CID
 
-  # test_expect_success "can push from node 0 to node 1" "
-  #   carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
-  # "
+  test_expect_success "can push from node 0 to node 1" "
+    carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
+  "
+
+  sleep 15
   
   iptb logs 0
   iptb logs 1
 
-  # This is failing because there is a nested CID that is still missing.
-  # It works manually though.  Why?
-  #
-  # 222.77 KiB / 222.77 KiB [==========================================================================================================================================================================================================================================================] 100.00% 0s
-  # Error: block was not found locally (offline): ipld: could not find QmQZDRY5qrE3ABDQAg4yq2PNEZ9F1HqMGhT36Uqg7G8aFV
-  # 'get_error' contains undesired value 'block was not found locally'
-  # check_has_cid_root 1 $ROOT_CID
+  check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop
@@ -170,23 +166,23 @@ run_push_test() {
 run_pull_test() {
   startup_cluster_disconnected 2 "$@"
 
-  # test_expect_success "clean repo before test" '
-  #   ipfsi 0 repo gc > /dev/null &&
-  #   ipfsi 1 repo gc > /dev/null
-  # '
+  test_expect_success "clean repo before test" '
+    ipfsi 0 repo gc > /dev/null &&
+    ipfsi 1 repo gc > /dev/null
+  '
 
-  # test_expect_success "import test CAR file on node 0" '
-  #   ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
-  # '
+  test_expect_success "import test CAR file on node 0" '
+    ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
+  '
 
-  # check_has_cid_root 0 $ROOT_CID
-  # check_not_has_cid_root 1 $ROOT_CID
+  check_has_cid_root 0 $ROOT_CID
+  check_not_has_cid_root 1 $ROOT_CID
 
-  # test_expect_success "can pull from node 0 to node 1" "
-  #   carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
-  # "
+  test_expect_success "can pull from node 0 to node 1" "
+    carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
+  "
 
-  # check_has_cid_root 1 $ROOT_CID
+  check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
     iptb stop && iptb_wait_stop

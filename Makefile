@@ -8,6 +8,7 @@ all: build test
 
 clean:
 	go clean ./...
+	cd ../kubo && git co -- go.* plugin/*
 
 build-core:
 	go build ./...
