@@ -2,17 +2,17 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 
-	// "github.com/fission-codes/kubo-car-mirror/oldcarmirror"
 	"github.com/fission-codes/kubo-car-mirror/carmirror"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	plugin "github.com/ipfs/kubo/plugin"
 )
 
-var log = golog.Logger("car-mirror")
+var log = golog.Logger("kubo-car-mirror")
 
 // Plugins is an exported list of plugins that will be loaded by kubo
 var Plugins = []plugin.Plugin{
@@ -30,19 +30,17 @@ type CarMirrorPlugin struct {
 	HTTPCommandsAddr string
 	// HTTPRemoteAddr is the address CAR Mirror will listen on for remote requests, which are protocol concerns.
 	// Defaults to `:2503`.
-	HTTPRemoteAddr       string
-	MaxBlocksPerRound    int64
-	MaxBlocksPerColdCall int64
+	HTTPRemoteAddr string
+	MaxBatchSize   uint32
 }
 
 // NewCarMirrorPlugin creates a CarMirrorPlugin with some sensible defaults
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
-		LogLevel:             "info",
-		HTTPRemoteAddr:       ":2503",
-		HTTPCommandsAddr:     "127.0.0.1:2502",
-		MaxBlocksPerRound:    100,
-		MaxBlocksPerColdCall: 20,
+		LogLevel:         "info",
+		HTTPRemoteAddr:   ":2503",
+		HTTPCommandsAddr: "127.0.0.1:2502",
+		MaxBatchSize:     100,
 	}
 }
 
@@ -58,7 +56,7 @@ func (*CarMirrorPlugin) Version() string {
 }
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
-	log.Debugf("Init")
+	log.Debugw("CarMirrorPlugin", "method", "Init")
 	p.loadConfig(env.Config)
 
 	// Only set default log level if env var isn't set
@@ -70,17 +68,15 @@ func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 }
 
 func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
-	log.Debugf("Start")
+	log.Debugw("CarMirrorPlugin", "method", "Start")
 
-	lng, err := carmirror.NewLocalNodeGetter(capi)
-	if err != nil {
-		return err
-	}
+	clientBlockStore := carmirror.NewKuboStore(capi)
+	serverBlockStore := carmirror.NewKuboStore(capi)
 
-	p.carmirror, err = carmirror.New(lng, capi, capi.Block(), func(cfg *carmirror.Config) {
+	var err error
+	p.carmirror, err = carmirror.New(capi, clientBlockStore, serverBlockStore, func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
-		cfg.MaxBlocksPerColdCall = p.MaxBlocksPerColdCall
-		cfg.MaxBlocksPerRound = p.MaxBlocksPerRound
+		cfg.MaxBatchSize = 32 // p.MaxBatchSize
 	})
 	if err != nil {
 		return err
@@ -98,18 +94,16 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 }
 
 func (p *CarMirrorPlugin) Close() error {
-	log.Debugf("Close")
+	log.Debugw("CarMirrorPlugin", "method", "Close")
 	return nil
 }
 
 func (p *CarMirrorPlugin) listenLocalCommands() error {
 	m := http.NewServeMux()
-	// The CAR Mirror spec doesn't specify how a user initiates a new session.
-	// That is an application concern, not protocol, and we've decided to initiate the request
-	// via a request to the endpoints below.  Once a request for a new push or pull session has been received,
-	// the running CAR Mirror server can then handle the protocol level concerns.
-	// m.Handle("/dag/push/new", p.carmirror.NewPushSessionHandler())
-	// m.Handle("/dag/pull/new", p.carmirror.NewPullSessionHandler())
+	m.Handle("/push/new", p.carmirror.NewPushSessionHandler())
+	m.Handle("/pull/new", p.carmirror.NewPullSessionHandler())
+	m.Handle("/ls", p.carmirror.LsHandler())
+	m.Handle("/close", p.carmirror.CloseHandler())
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 
@@ -123,11 +117,8 @@ func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {
 	if v := getString(cfg, "LogLevel"); v != "" {
 		p.LogLevel = v
 	}
-	if v := getInt64(cfg, "MaxBlocksPerColdCall"); v != -1 {
-		p.MaxBlocksPerColdCall = v
-	}
-	if v := getInt64(cfg, "MaxBlocksPerRound"); v != -1 {
-		p.MaxBlocksPerRound = v
+	if v, err := getUint32(cfg, "MaxBatchSize"); err != nil {
+		p.MaxBatchSize = v
 	}
 }
 
@@ -167,4 +158,23 @@ func getInt64(config interface{}, name string) int64 {
 		return -1
 	}
 	return value
+}
+
+func getUint32(config interface{}, name string) (uint32, error) {
+	if config == nil {
+		return 0, errors.New("nil config")
+	}
+	mapIface, ok := config.(map[string]interface{})
+	if !ok {
+		return 0, errors.New("can't convert config to map")
+	}
+	rawValue, ok := mapIface[name]
+	if !ok || rawValue == "" {
+		return 0, errors.New("name not found in config map")
+	}
+	value, ok := rawValue.(uint32)
+	if !ok {
+		return 0, errors.New("unable to cast value to uint32")
+	}
+	return value, nil
 }

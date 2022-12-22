@@ -4,29 +4,49 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
-	ipld "github.com/ipfs/go-ipld-format"
+	"github.com/fission-codes/go-car-mirror/filter"
+	cmhttp "github.com/fission-codes/go-car-mirror/http"
+	cmipld "github.com/fission-codes/go-car-mirror/ipld"
+	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
-	options "github.com/ipfs/interface-go-ipfs-core/options"
+	"github.com/zeebo/xxh3"
 )
 
 const Version = "0.1.0"
 
 var log = golog.Logger("kubo-car-mirror")
 
+const HASH_FUNCTION = 3
+
+func init() {
+	filter.RegisterHash(3, XX3HashBlockId)
+}
+
+func XX3HashBlockId(id cmipld.Cid, seed uint64) uint64 {
+	return xxh3.HashSeed(id.Bytes(), seed)
+}
+
 type CarMirror struct {
 	// CAR Mirror config
 	cfg *Config
 
-	// Local node getter
-	lng ipld.NodeGetter
-
 	// CoreAPI
 	capi coreiface.CoreAPI
 
-	// Local block API
-	bapi coreiface.BlockAPI
+	// Client block store
+	clientBlockStore *KuboStore
+
+	// Server block store
+	serverBlockStore *KuboStore
+
+	// HTTP client for CAR Mirror requests
+	client *cmhttp.Client[cmipld.Cid, *cmipld.Cid]
+
+	// HTTP server for CAR Mirror requests
+	server *cmhttp.Server[cmipld.Cid, *cmipld.Cid]
 
 	// HTTP server accepting CAR Mirror requests
 	httpServer *http.Server
@@ -34,9 +54,8 @@ type CarMirror struct {
 
 // Config encapsulates CAR Mirror configuration
 type Config struct {
-	HTTPRemoteAddr       string
-	MaxBlocksPerRound    int64
-	MaxBlocksPerColdCall int64
+	HTTPRemoteAddr string
+	MaxBatchSize   uint32
 }
 
 // Validate confirms the configuration is valid
@@ -45,23 +64,15 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("HTTPRemoteAddr is required")
 	}
 
-	if cfg.MaxBlocksPerColdCall < 1 {
-		return fmt.Errorf("MaxBlocksPerColdCall must be a positive number")
-	}
-
-	if cfg.MaxBlocksPerRound < 1 {
-		return fmt.Errorf("MaxBlocksPerRound must be a positive number")
+	if cfg.MaxBatchSize < 1 {
+		return fmt.Errorf("MaxBatchSize must be a positive number")
 	}
 
 	return nil
 }
 
 // New creates a local CAR Mirror service.
-//
-// Its crucial that the NodeGetter passed to New be an offline-only getter.
-// If using IPFS, this package defines a helper function: NewLocalNodeGetter
-// to get an offline-only node getter from an IPFS CoreAPI interface.
-func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreiface.BlockAPI, opts ...func(cfg *Config)) (*CarMirror, error) {
+func New(capi coreiface.CoreAPI, clientBlockStore *KuboStore, serverBlockStore *KuboStore, opts ...func(cfg *Config)) (*CarMirror, error) {
 	// Add default stuff to the config
 	cfg := &Config{}
 
@@ -73,52 +84,144 @@ func New(localNodes ipld.NodeGetter, capi coreiface.CoreAPI, blockStore coreifac
 		return nil, err
 	}
 
-	cm := &CarMirror{
-		cfg:  cfg,
-		lng:  localNodes,
-		capi: capi,
-		bapi: blockStore,
+	cmConfig := cmhttp.Config{
+		MaxBatchSize:  cfg.MaxBatchSize,
+		Address:       cfg.HTTPRemoteAddr,
+		BloomFunction: HASH_FUNCTION,
+		BloomCapacity: 1024,
+		Instrument:    true,
 	}
 
-	if cfg.HTTPRemoteAddr != "" {
-		m := http.NewServeMux()
-		// m.Handle("/dag/push", cm.HTTPRemotePushHandler())
-		// m.Handle("/dag/pull", cm.HTTPRemotePullHandler())
-
-		cm.httpServer = &http.Server{
-			Addr:    cfg.HTTPRemoteAddr,
-			Handler: m,
-		}
+	cm := &CarMirror{
+		cfg:              cfg,
+		capi:             capi,
+		clientBlockStore: clientBlockStore,
+		serverBlockStore: serverBlockStore,
+		client:           cmhttp.NewClient[cmipld.Cid](clientBlockStore, cmConfig),
+		server:           cmhttp.NewServer[cmipld.Cid](serverBlockStore, cmConfig),
 	}
 
 	return cm, nil
 }
 
 func (cm *CarMirror) StartRemote(ctx context.Context) error {
-	if cm.httpServer == nil {
+	if cm.server == nil {
 		return fmt.Errorf("CAR Mirror is not configured as a remote")
 	}
 
 	go func() {
 		<-ctx.Done()
-		if cm.httpServer != nil {
-			cm.httpServer.Close()
+		if cm.server != nil {
+			cm.server.Stop()
 		}
 	}()
 
-	if cm.httpServer != nil {
-		go cm.httpServer.ListenAndServe()
+	if cm.server != nil {
+		go cm.server.Start()
 	}
 
 	log.Debug("CAR Mirror remote started")
 	return nil
 }
 
-// NewLocalNodeGetter creates a local (no fetch) NodeGetter from a CoreAPI.
-func NewLocalNodeGetter(api coreiface.CoreAPI) (ipld.NodeGetter, error) {
-	noFetchBlocks, err := api.WithOptions(options.Api.FetchBlocks(false))
-	if err != nil {
-		return nil, err
-	}
-	return noFetchBlocks.Dag(), nil
+type PushParams struct {
+	Cid    string
+	Addr   string
+	Diff   string
+	Stream bool
+}
+
+func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PushParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Diff:   r.FormValue("diff"),
+				Stream: r.FormValue("stream") == "true",
+			}
+			log.Debugw("NewPushSessionHandler", "params", p)
+
+			// Parse the CID
+			cid, err := gocid.Parse(p.Cid)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			// Initiate the push
+			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
+
+			if err != nil {
+				log.Debugw("NewPushSessionHandler", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			cm.client.CloseSource(p.Addr)
+			// TODO: This will hang eternally if things go wrong
+			info, err := cm.client.SourceInfo(p.Addr)
+			for err == nil {
+				log.Debugf("client info: %s", info.String())
+				time.Sleep(100 * time.Millisecond)
+				info, err = cm.client.SourceInfo(p.Addr)
+			}
+
+			if err != cmhttp.ErrInvalidSession {
+				log.Debugw("Closed with unexpected error", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+		}
+	})
+}
+
+type PullParams struct {
+	Cid    string
+	Addr   string
+	Stream bool
+}
+
+func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := PullParams{
+				Cid:    r.FormValue("cid"),
+				Addr:   r.FormValue("addr"),
+				Stream: r.FormValue("stream") == "true",
+			}
+			log.Debugw("NewPullSessionHandler", "params", p)
+		}
+	})
+}
+
+type LsParams struct {
+}
+
+func (cm *CarMirror) LsHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := LsParams{}
+			log.Debugw("LsHandler", "params", p)
+		}
+	})
+}
+
+type CloseParams struct {
+}
+
+func (cm *CarMirror) CloseHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := CloseParams{}
+			log.Debugw("CloseHandler", "params", p)
+		}
+	})
 }

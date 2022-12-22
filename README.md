@@ -29,6 +29,9 @@ cd kubo-car-mirror
 
 # Build everything, including the kubo plugin
 make build
+
+# Build everything, using a local go-car-mirror dependency in a sibling clone
+make build-local
 ```
 
 ## Testing
@@ -124,7 +127,7 @@ You can enable debugging in the logs using the `GOLOG_LOG_LEVEL` environment var
 
 ```
 # Turn on debugging
-export GOLOG_LOG_LEVEL="error,car-mirror=debug"
+export GOLOG_LOG_LEVEL="error,kubo-car-mirror=debug,go-car-mirror=debug"
 
 # Start daemon, start testbed, run commands, ...
 ```
@@ -140,11 +143,8 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 # Configure port for remotely accessible commands (i.e. the actual protocol commands)
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '":2503"'
 
-# Configure max blocks to send for cold calls
-../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerColdCall 100
-
-# Configure max blocks to send per round
-../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerRound 200
+# Configure max batch size
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBatchSize 32
 
 # Disable the plugin
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Disabled true

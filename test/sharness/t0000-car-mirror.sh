@@ -122,7 +122,7 @@ check_not_has_cid_root() {
   node=$1
   cid=$2
 
-  test_expect_success "node $node can get cid root $cid" '
+  test_expect_success "node $node can not get cid root $cid" '
     ipfsi $node get $cid --offline >/dev/null 2> get_error
     test_should_contain "block was not found locally" get_error
   '
@@ -150,16 +150,12 @@ run_push_test() {
   test_expect_success "can push from node 0 to node 1" "
     carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
   "
+
+  # sleep 5
   
   iptb logs 0
   iptb logs 1
 
-  # This is failing because there is a nested CID that is still missing.
-  # It works manually though.  Why?
-  #
-  # 222.77 KiB / 222.77 KiB [==========================================================================================================================================================================================================================================================] 100.00% 0s
-  # Error: block was not found locally (offline): ipld: could not find QmQZDRY5qrE3ABDQAg4yq2PNEZ9F1HqMGhT36Uqg7G8aFV
-  # 'get_error' contains undesired value 'block was not found locally'
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '

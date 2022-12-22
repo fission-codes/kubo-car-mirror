@@ -8,6 +8,11 @@ all: build test
 
 clean:
 	go clean ./...
+	cd ../kubo && git co -- go.* plugin/*
+
+setup-local:
+	go mod edit -replace=github.com/fission-codes/go-car-mirror=../go-car-mirror
+	cd ../kubo && go mod edit -replace=github.com/fission-codes/go-car-mirror=../go-car-mirror
 
 build-core:
 	go build ./...
@@ -27,6 +32,8 @@ build-plugin: setup-plugin
 	$(MAKE) -C ../kubo build
 
 build: build-core build-plugin
+
+build-local: setup-local build-core build-plugin
 
 test: test-unit sharness
 
