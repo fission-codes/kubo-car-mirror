@@ -13,18 +13,26 @@ import (
 
 type KuboStore struct {
 	store ipld.DAGService
+	lng   ipld.NodeGetter
 	pins  kubo.PinAPI
 }
 
 func NewKuboStore(core kubo.CoreAPI) *KuboStore {
+	// TODO: pass errors back to caller instead of panicking
+	lng, err := NewLocalNodeGetter(core)
+	if err != nil {
+		panic(err)
+	}
+
 	return &KuboStore{
-		core.Dag(),
-		core.Pin(),
+		store: core.Dag(),
+		lng:   lng,
+		pins:  core.Pin(),
 	}
 }
 
 func (ks *KuboStore) Get(ctx context.Context, cid cmipld.Cid) (cm.Block[cmipld.Cid], error) {
-	if node, err := ks.store.Get(ctx, cid.Unwrap()); err != nil {
+	if node, err := ks.lng.Get(ctx, cid.Unwrap()); err != nil {
 		return nil, err
 	} else {
 		return cmipld.WrapBlock(node), nil
@@ -32,7 +40,7 @@ func (ks *KuboStore) Get(ctx context.Context, cid cmipld.Cid) (cm.Block[cmipld.C
 }
 
 func (ks *KuboStore) Has(ctx context.Context, cid cmipld.Cid) (bool, error) {
-	if _, err := ks.store.Get(ctx, cid.Unwrap()); err != nil {
+	if _, err := ks.lng.Get(ctx, cid.Unwrap()); err != nil {
 		return false, nil
 	} else {
 		return true, nil
@@ -78,4 +86,13 @@ func (ks *KuboStore) All(ctx context.Context) (<-chan cmipld.Cid, error) {
 		}()
 		return cids, nil
 	}
+}
+
+// NewLocalNodeGetter creates a local (no fetch) NodeGetter from a CoreAPI.
+func NewLocalNodeGetter(api kubo.CoreAPI) (ipld.NodeGetter, error) {
+	noFetchBlocks, err := api.WithOptions(opts.Api.FetchBlocks(false))
+	if err != nil {
+		return nil, err
+	}
+	return noFetchBlocks.Dag(), nil
 }
