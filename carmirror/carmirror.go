@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
@@ -161,20 +162,20 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			}
 
 			cm.client.CloseSource(p.Addr)
-			// This hangs forever
-			// info, err := cm.client.SourceInfo(p.Addr)
-			// for err == nil {
-			// 	log.Debugf("client info: %s", info.String())
-			// 	time.Sleep(100 * time.Millisecond)
-			// 	info, err = cm.client.SourceInfo(p.Addr)
-			// }
+			// TODO: This will hang eternally if things go wrong
+			info, err := cm.client.SourceInfo(p.Addr)
+			for err == nil {
+				log.Debugf("client info: %s", info.String())
+				time.Sleep(100 * time.Millisecond)
+				info, err = cm.client.SourceInfo(p.Addr)
+			}
 
-			// if err != cmhttp.ErrInvalidSession {
-			// 	log.Debugw("Closed with unexpected error", "error", err)
-			// 	w.WriteHeader(http.StatusInternalServerError)
-			// 	w.Write([]byte(err.Error()))
-			// 	return
-			// }
+			if err != cmhttp.ErrInvalidSession {
+				log.Debugw("Closed with unexpected error", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
 		}
 	})
 }
