@@ -151,7 +151,7 @@ run_push_test() {
     carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
   "
 
-  sleep 5
+  sleep 15
   
   iptb logs 0
   iptb logs 1

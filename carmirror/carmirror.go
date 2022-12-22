@@ -84,6 +84,7 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 		MaxBatchSize:  cfg.MaxBatchSize,
 		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
+		BloomCapacity: 1024,
 	}
 
 	cm := &CarMirror{
@@ -146,7 +147,10 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 			// Initiate the push
 			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
+
+			defer cm.client.CloseSource(p.Addr)
 			if err != nil {
+				log.Debugw("NewPushSessionHandler", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
