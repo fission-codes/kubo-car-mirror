@@ -85,6 +85,7 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
 		BloomCapacity: 1024,
+		Instrument:    true,
 	}
 
 	cm := &CarMirror{
@@ -148,13 +149,28 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			// Initiate the push
 			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
 
-			defer cm.client.CloseSource(p.Addr)
 			if err != nil {
 				log.Debugw("NewPushSessionHandler", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
+
+			cm.client.CloseSource(p.Addr)
+			// This hangs forever
+			// info, err := cm.client.SourceInfo(p.Addr)
+			// for err == nil {
+			// 	log.Debugf("client info: %s", info.String())
+			// 	time.Sleep(100 * time.Millisecond)
+			// 	info, err = cm.client.SourceInfo(p.Addr)
+			// }
+
+			// if err != cmhttp.ErrInvalidSession {
+			// 	log.Debugw("Closed with unexpected error", "error", err)
+			// 	w.WriteHeader(http.StatusInternalServerError)
+			// 	w.Write([]byte(err.Error()))
+			// 	return
+			// }
 		}
 	})
 }
