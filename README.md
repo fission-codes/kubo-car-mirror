@@ -29,6 +29,9 @@ cd kubo-car-mirror
 
 # Build everything, including the kubo plugin
 make build
+
+# Build everything, using a local go-car-mirror dependency in a sibling clone
+make build-local
 ```
 
 ## Testing
