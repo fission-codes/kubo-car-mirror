@@ -13,7 +13,7 @@ require (
 	github.com/ipfs/go-bitswap v0.11.0 // indirect
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-blockservice v0.5.0 // indirect
-	github.com/ipfs/go-cid v0.3.2 // indirect
+	github.com/ipfs/go-cid v0.3.2
 	github.com/ipfs/go-cidutil v0.1.0 // indirect
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-measure v0.2.0 // indirect
@@ -85,6 +85,7 @@ require (
 	github.com/fission-codes/go-car-mirror v0.0.0-20230103193822-cb40db094158
 	github.com/ipfs/kubo v0.17.0
 	github.com/spf13/cobra v1.6.1
+	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/exp v0.0.0-20221212164502-fae10dda9338
 )
 
@@ -202,7 +203,6 @@ require (
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/otel/exporters/jaeger v1.7.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.7.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.7.0 // indirect
@@ -227,5 +227,3 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
-
-replace github.com/fission-codes/go-car-mirror => ../go-car-mirror
