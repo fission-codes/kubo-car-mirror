@@ -196,6 +196,41 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 				Stream: r.FormValue("stream") == "true",
 			}
 			log.Debugw("NewPullSessionHandler", "params", p)
+
+			// Parse the CID
+			cid, err := gocid.Parse(p.Cid)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			// Initiate the pull
+			err = cm.client.Receive(p.Addr, cmipld.WrapCid(cid))
+
+			if err != nil {
+				log.Debugw("NewPullSessionHandler", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			cm.client.CloseSink(p.Addr)
+
+			// TODO: This will hang eternally if things go wrong
+			info, err := cm.client.SinkInfo(p.Addr)
+			for err == nil {
+				log.Debugf("client info: %s", info.String())
+				time.Sleep(100 * time.Millisecond)
+				info, err = cm.client.SinkInfo(p.Addr)
+			}
+
+			if err != cmhttp.ErrInvalidSession {
+				log.Debugw("Closed with unexpected error", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
 		}
 	})
 }

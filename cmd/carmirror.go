@@ -59,7 +59,7 @@ var pull = &cobra.Command{
 		cid := args[0]
 		addr := args[1]
 
-		endpoint := fmt.Sprintf("/dag/pull/new?cid=%s&addr=%s", cid, addr)
+		endpoint := fmt.Sprintf("/pull/new?cid=%s&addr=%s", cid, addr)
 		_, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
