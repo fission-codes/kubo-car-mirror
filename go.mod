@@ -82,7 +82,7 @@ require (
 )
 
 require (
-	github.com/fission-codes/go-car-mirror v0.0.0-20221221221828-a579b2819bea
+	github.com/fission-codes/go-car-mirror v0.0.0-20230103193822-cb40db094158
 	github.com/ipfs/kubo v0.17.0
 	github.com/spf13/cobra v1.6.1
 	golang.org/x/exp v0.0.0-20221212164502-fae10dda9338
@@ -227,3 +227,5 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
+
+replace github.com/fission-codes/go-car-mirror => ../go-car-mirror

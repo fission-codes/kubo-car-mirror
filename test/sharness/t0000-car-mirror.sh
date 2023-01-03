@@ -182,6 +182,11 @@ run_pull_test() {
     carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
   "
 
+  sleep 5
+
+  iptb logs 0
+  iptb logs 1
+
   check_has_cid_root 1 $ROOT_CID
 
   test_expect_success "shut down nodes" '
@@ -198,6 +203,6 @@ test_expect_success "configure the plugin" '
 '
 
 run_push_test
-# run_pull_test
+run_pull_test
 
 test_done
