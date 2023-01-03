@@ -182,8 +182,6 @@ run_pull_test() {
     carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
   "
 
-  sleep 5
-
   iptb logs 0
   iptb logs 1
 
