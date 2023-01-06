@@ -2,6 +2,7 @@ package carmirror
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -125,10 +126,11 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 }
 
 type PushParams struct {
-	Cid    string
-	Addr   string
-	Diff   string
-	Stream bool
+	Cid        string
+	Addr       string
+	Diff       string
+	Stream     bool
+	Background bool
 }
 
 func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
@@ -136,10 +138,11 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 		switch r.Method {
 		case "POST":
 			p := PushParams{
-				Cid:    r.FormValue("cid"),
-				Addr:   r.FormValue("addr"),
-				Diff:   r.FormValue("diff"),
-				Stream: r.FormValue("stream") == "true",
+				Cid:        r.FormValue("cid"),
+				Addr:       r.FormValue("addr"),
+				Diff:       r.FormValue("diff"),
+				Stream:     r.FormValue("stream") == "true",
+				Background: r.FormValue("background") == "true",
 			}
 			log.Debugw("NewPushSessionHandler", "params", p)
 
@@ -162,28 +165,32 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			}
 
 			cm.client.CloseSource(p.Addr)
-			// TODO: This will hang eternally if things go wrong
-			info, err := cm.client.SourceInfo(p.Addr)
-			for err == nil {
-				log.Debugf("client info: %s", info.String())
-				time.Sleep(100 * time.Millisecond)
-				info, err = cm.client.SourceInfo(p.Addr)
-			}
 
-			if err != cmhttp.ErrInvalidSession {
-				log.Debugw("Closed with unexpected error", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
-				return
+			// TODO: This will hang eternally if things go wrong
+			if !p.Background {
+				info, err := cm.client.SourceInfo(p.Addr)
+				for err == nil {
+					log.Debugf("client info: %s", info.String())
+					time.Sleep(100 * time.Millisecond)
+					info, err = cm.client.SourceInfo(p.Addr)
+				}
+
+				if err != cmhttp.ErrInvalidSession {
+					log.Debugw("Closed with unexpected error", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
 			}
 		}
 	})
 }
 
 type PullParams struct {
-	Cid    string
-	Addr   string
-	Stream bool
+	Cid        string
+	Addr       string
+	Stream     bool
+	Background bool
 }
 
 func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
@@ -191,9 +198,10 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 		switch r.Method {
 		case "POST":
 			p := PullParams{
-				Cid:    r.FormValue("cid"),
-				Addr:   r.FormValue("addr"),
-				Stream: r.FormValue("stream") == "true",
+				Cid:        r.FormValue("cid"),
+				Addr:       r.FormValue("addr"),
+				Stream:     r.FormValue("stream") == "true",
+				Background: r.FormValue("background") == "true",
 			}
 			log.Debugw("NewPullSessionHandler", "params", p)
 
@@ -218,18 +226,20 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			cm.client.CloseSink(p.Addr)
 
 			// TODO: This will hang eternally if things go wrong
-			info, err := cm.client.SinkInfo(p.Addr)
-			for err == nil {
-				log.Debugf("client info: %s", info.String())
-				time.Sleep(100 * time.Millisecond)
-				info, err = cm.client.SinkInfo(p.Addr)
-			}
+			if !p.Background {
+				info, err := cm.client.SinkInfo(p.Addr)
+				for err == nil {
+					log.Debugf("client info: %s", info.String())
+					time.Sleep(100 * time.Millisecond)
+					info, err = cm.client.SinkInfo(p.Addr)
+				}
 
-			if err != cmhttp.ErrInvalidSession {
-				log.Debugw("Closed with unexpected error", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
-				return
+				if err != cmhttp.ErrInvalidSession {
+					log.Debugw("Closed with unexpected error", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
 			}
 		}
 	})
@@ -244,6 +254,73 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 		case "POST":
 			p := LsParams{}
 			log.Debugw("LsHandler", "params", p)
+			var sessions []string
+
+			// log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
+			sessionTokens := cm.server.SinkSessions()
+			for _, sessionToken := range sessionTokens {
+				sessions = append(sessions, string(sessionToken))
+
+				sessionInfo, err := cm.server.SinkInfo(sessionToken)
+				if err != nil {
+					log.Debugw("LsHandler", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
+			}
+
+			log.Debugw("LsHandler", "server.sourceSessions", cm.server.SourceSessions())
+			sessionTokens = cm.server.SourceSessions()
+			for _, sessionToken := range sessionTokens {
+				sessions = append(sessions, string(sessionToken))
+
+				sessionInfo, err := cm.server.SourceInfo(sessionToken)
+				if err != nil {
+					log.Debugw("LsHandler", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
+			}
+
+			// log.Debugw("LsHandler", "client.sinkSessions", cm.client.SinkSessions())
+			// TODO: update client.SinkSessions to return a slice of session tokens instead of strings
+			clientSessionTokens := cm.client.SinkSessions()
+			for _, sessionToken := range clientSessionTokens {
+				sessions = append(sessions, string(sessionToken))
+
+				sessionInfo, err := cm.client.SinkInfo(sessionToken)
+				if err != nil {
+					log.Debugw("LsHandler", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
+			}
+
+			// log.Debugw("LsHandler", "client.sourceSessions", cm.client.SourceSessions())
+			clientSessionTokens = cm.client.SourceSessions()
+			for _, sessionToken := range clientSessionTokens {
+				sessions = append(sessions, string(sessionToken))
+
+				sessionInfo, err := cm.client.SourceInfo(sessionToken)
+				if err != nil {
+					log.Debugw("LsHandler", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
+			}
+
+			// Write the response
+			json.NewEncoder(w).Encode(sessions)
+			// w.WriteHeader(http.StatusOK)
+			return
 		}
 	})
 }
