@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	cm "github.com/fission-codes/go-car-mirror/carmirror"
+	cm "github.com/fission-codes/go-car-mirror/core"
 	errors "github.com/fission-codes/go-car-mirror/errors"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
 	blocks "github.com/ipfs/go-block-format"

@@ -131,7 +131,6 @@ check_not_has_cid_root() {
 ROOT_CID=QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W
 
 # ROOT_CID=QmVQJMFnQ9vqoeF983FyURehB4iktkupfGjAGcvC5ivMNL
-
 run_push_test() {
   startup_cluster_disconnected 2 "$@"
 
@@ -148,13 +147,10 @@ run_push_test() {
   check_not_has_cid_root 1 $ROOT_CID
 
   test_expect_success "can push from node 0 to node 1" "
-    carmirrori 0 push $ROOT_CID $(cm_cli_remote_addr 1)
+    carmirrori 0 push -c $ROOT_CID -a $(cm_cli_remote_addr 1)
   "
 
-  # sleep 5
-  
-  iptb logs 0
-  iptb logs 1
+  sleep 5
 
   check_has_cid_root 1 $ROOT_CID
 
@@ -162,6 +158,65 @@ run_push_test() {
     iptb stop && iptb_wait_stop
   '
 }
+
+run_push_background_test() {
+  startup_cluster_disconnected 2 "$@"
+
+  test_expect_success "clean repo before test" '
+    ipfsi 0 repo gc > /dev/null &&
+    ipfsi 1 repo gc > /dev/null
+  '
+
+  test_expect_success "import test CAR file on node 0" '
+    ipfsi 0 dag import ../t0000-car-mirror-data/car-mirror.car
+  '
+
+  check_has_cid_root 0 $ROOT_CID
+  check_not_has_cid_root 1 $ROOT_CID
+
+  test_expect_success "can push from node 0 to node 1" "
+    carmirrori 0 push -b -c $ROOT_CID -a $(cm_cli_remote_addr 1)
+  "
+
+  check_not_has_cid_root 1 $ROOT_CID
+
+  test_expect_success "before: carmirror ls on node 0 is not blank" "
+    carmirrori 0 ls 2> get_error
+    cat get_error
+  "
+  test_expect_success "before: carmirror ls on node 1 is not blank" "
+    carmirrori 1 ls 2> get_error
+    cat get_error
+  "
+
+  iptb logs 0 2>&1 > get_error
+  cat get_error
+  iptb logs 1 2>&1 > get_error
+  cat get_error
+
+  sleep 5
+
+  test_expect_success "after: carmirror ls on node 0 is not blank" "
+    carmirrori 0 ls 2> get_error
+    cat get_error
+  "
+  test_expect_success "after: carmirror ls on node 1 is not blank" "
+    carmirrori 1 ls 2> get_error
+    cat get_error
+  "
+
+  iptb logs 0 2>&1 > get_error
+  cat get_error
+  iptb logs 1 2>&1 > get_error
+  cat get_error
+
+  check_has_cid_root 1 $ROOT_CID
+
+  test_expect_success "shut down nodes" '
+    iptb stop && iptb_wait_stop
+  '
+}
+
 
 run_pull_test() {
   startup_cluster_disconnected 2 "$@"
@@ -179,11 +234,8 @@ run_pull_test() {
   check_not_has_cid_root 1 $ROOT_CID
 
   test_expect_success "can pull from node 0 to node 1" "
-    carmirrori 1 pull $ROOT_CID $(cm_cli_remote_addr 0)
+    carmirrori 1 pull -c $ROOT_CID -a $(cm_cli_remote_addr 0)
   "
-
-  iptb logs 0
-  iptb logs 1
 
   check_has_cid_root 1 $ROOT_CID
 
@@ -201,6 +253,7 @@ test_expect_success "configure the plugin" '
 '
 
 run_push_test
+run_push_background_test
 run_pull_test
 
 test_done

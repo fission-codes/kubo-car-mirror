@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	cm "github.com/fission-codes/go-car-mirror/carmirror"
+	cm "github.com/fission-codes/go-car-mirror/core"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
 	"golang.org/x/exp/slices"
 
