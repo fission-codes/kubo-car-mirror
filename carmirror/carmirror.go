@@ -254,7 +254,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 		case "POST":
 			p := LsParams{}
 			log.Debugw("LsHandler", "params", p)
-			var sessions []string
+			sessions := make([]string, 0)
 
 			log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
 			sessionTokens := cm.server.SinkSessions()
