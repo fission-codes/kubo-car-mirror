@@ -256,7 +256,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 			log.Debugw("LsHandler", "params", p)
 			var sessions []string
 
-			// log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
+			log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
 			sessionTokens := cm.server.SinkSessions()
 			for _, sessionToken := range sessionTokens {
 				sessions = append(sessions, string(sessionToken))
@@ -286,7 +286,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
-			// log.Debugw("LsHandler", "client.sinkSessions", cm.client.SinkSessions())
+			log.Debugw("LsHandler", "client.sinkSessions", cm.client.SinkSessions())
 			// TODO: update client.SinkSessions to return a slice of session tokens instead of strings
 			clientSessionTokens := cm.client.SinkSessions()
 			for _, sessionToken := range clientSessionTokens {
@@ -302,7 +302,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
-			// log.Debugw("LsHandler", "client.sourceSessions", cm.client.SourceSessions())
+			log.Debugw("LsHandler", "client.sourceSessions", cm.client.SourceSessions())
 			clientSessionTokens = cm.client.SourceSessions()
 			for _, sessionToken := range clientSessionTokens {
 				sessions = append(sessions, string(sessionToken))

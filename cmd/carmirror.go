@@ -15,10 +15,12 @@ var (
 	defaultCmdAddr = "http://localhost:2502"
 )
 
-const pushBackgroundOptionName = "background"
-const pullBackgroundOptionName = "background"
-
 var log = golog.Logger("kubo-car-mirror")
+
+var background bool
+var cid string
+var addr string
+var diff string
 
 // root command
 var root = &cobra.Command{
@@ -32,23 +34,20 @@ https://github.com/fission-codes/kubo-car-mirror`,
 var push *cobra.Command = &cobra.Command{
 	Use:   "push",
 	Short: "copy cid from local repo to remote addr",
-	Args:  cobra.RangeArgs(2, 3),
+	// Args:  cobra.
 	Run: func(cmd *cobra.Command, args []string) {
-		cid := args[0]
-		addr := args[1]
-		var background string
-		if cmd.Flag(pushBackgroundOptionName).Value.String() == "true" {
-			background = "true"
+		var bgString string
+		if background {
+			bgString = "true"
 		} else {
-			background = "false"
+			bgString = "false"
 		}
 
 		var endpoint string
-		if len(args) == 3 {
-			diff := args[2]
-			endpoint = fmt.Sprintf("push/new?cid=%s&addr=%s&diff=%s&background=%s", cid, addr, diff, background)
+		if diff != "" {
+			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s&diff=%s&background=%s", cid, addr, diff, bgString)
 		} else {
-			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s&background=%s", cid, addr, background)
+			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s&background=%s", cid, addr, bgString)
 		}
 
 		res, err := doRemoteHTTPReq("POST", endpoint)
@@ -68,16 +67,14 @@ var pull = &cobra.Command{
 	Use:   "pull",
 	Short: "copy remote cid from remote addr to local repo",
 	Run: func(cmd *cobra.Command, args []string) {
-		cid := args[0]
-		addr := args[1]
-		var background string
-		if cmd.Flag(pullBackgroundOptionName).Value.String() == "true" {
-			background = "true"
+		var bgString string
+		if background {
+			bgString = "true"
 		} else {
-			background = "false"
+			bgString = "false"
 		}
 
-		endpoint := fmt.Sprintf("/pull/new?cid=%s&addr=%s&background=%s", cid, addr, background)
+		endpoint := fmt.Sprintf("/pull/new?cid=%s&addr=%s&background=%s", cid, addr, bgString)
 		_, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
@@ -113,8 +110,20 @@ var ls = &cobra.Command{
 
 func init() {
 	root.PersistentFlags().StringVar(&defaultCmdAddr, "commands-address", defaultCmdAddr, "address to issue requests that control local carmirror")
-	push.Flags().BoolP(pushBackgroundOptionName, "b", false, "push in background")
-	pull.Flags().BoolP(pullBackgroundOptionName, "b", false, "pull in background")
+
+	push.Flags().StringVarP(&cid, "cid", "c", "", "cid to push")
+	push.Flags().StringVarP(&addr, "addr", "a", "", "remote address to push to")
+	push.Flags().StringP("diff", "d", "", "diff against cid")
+	push.Flags().BoolVarP(&background, "background", "b", false, "push in background")
+	push.MarkFlagRequired("cid")
+	push.MarkFlagRequired("addr")
+
+	pull.Flags().StringVarP(&cid, "cid", "c", "", "cid to pull")
+	pull.Flags().StringVarP(&addr, "addr", "a", "", "remote address to pull from")
+	pull.Flags().BoolVarP(&background, "background", "b", false, "pull in background")
+	pull.MarkFlagRequired("cid")
+	pull.MarkFlagRequired("addr")
+
 	root.AddCommand(push, pull, ls)
 }
 
