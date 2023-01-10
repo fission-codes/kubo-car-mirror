@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	instrumented "github.com/fission-codes/go-car-mirror/core/instrumented"
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
@@ -48,9 +49,6 @@ type CarMirror struct {
 
 	// HTTP server for CAR Mirror requests
 	server *cmhttp.Server[cmipld.Cid, *cmipld.Cid]
-
-	// HTTP server accepting CAR Mirror requests
-	httpServer *http.Server
 }
 
 // Config encapsulates CAR Mirror configuration
@@ -90,7 +88,8 @@ func New(capi coreiface.CoreAPI, clientBlockStore *KuboStore, serverBlockStore *
 		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
 		BloomCapacity: 1024,
-		Instrument:    true,
+		// TODO: Make this configurable via config file
+		Instrument: instrumented.INSTRUMENT_ORCHESTRATOR | instrumented.INSTRUMENT_STORE | instrumented.INSTRUMENT_FILTER,
 	}
 
 	cm := &CarMirror{
@@ -149,8 +148,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -159,15 +157,16 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 			if err != nil {
 				log.Debugw("NewPushSessionHandler", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
-			cm.client.CloseSource(p.Addr)
-
-			// TODO: This will hang eternally if things go wrong
 			if !p.Background {
+				// TODO: This close is intentionally only being called if the job runs in the background.  It may make
+				// more sense to not conflate background with not closing though.
+				// Close the session and wait for the other end to close
+				cm.client.CloseSource(p.Addr)
+
 				info, err := cm.client.SourceInfo(p.Addr)
 				for err == nil {
 					log.Debugf("client info: %s", info.String())
@@ -177,8 +176,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 				if err != cmhttp.ErrInvalidSession {
 					log.Debugw("Closed with unexpected error", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 			}
@@ -208,8 +206,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -218,15 +215,14 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			if err != nil {
 				log.Debugw("NewPullSessionHandler", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
-			cm.client.CloseSink(p.Addr)
-
-			// TODO: This will hang eternally if things go wrong
 			if !p.Background {
+				// Close the session and wait for the other end to close
+				cm.client.CloseSink(p.Addr)
+
 				info, err := cm.client.SinkInfo(p.Addr)
 				for err == nil {
 					log.Debugf("client info: %s", info.String())
@@ -237,7 +233,8 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 				if err != cmhttp.ErrInvalidSession {
 					log.Debugw("Closed with unexpected error", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 			}
@@ -254,7 +251,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 		case "POST":
 			p := LsParams{}
 			log.Debugw("LsHandler", "params", p)
-			var sessions []string
+			sessions := make([]string, 0)
 
 			log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
 			sessionTokens := cm.server.SinkSessions()
@@ -264,8 +261,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.server.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -279,8 +275,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.server.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -295,8 +290,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.client.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -310,8 +304,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.client.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -319,21 +312,67 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 
 			// Write the response
 			json.NewEncoder(w).Encode(sessions)
-			// w.WriteHeader(http.StatusOK)
 			return
 		}
 	})
 }
 
 type CloseParams struct {
+	Session string
 }
 
 func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			p := CloseParams{}
+			p := CloseParams{
+				Session: r.FormValue("session"),
+			}
 			log.Debugw("CloseHandler", "params", p)
+
+			for _, sessionToken := range cm.client.SinkSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CloseSink(sessionToken); err != nil {
+						log.Debugw("CloseHandler", "error", err)
+						WriteError(w, err)
+						return
+					}
+
+					WriteSuccess(w)
+
+					return
+				}
+			}
+
+			for _, sessionToken := range cm.client.SourceSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CloseSource(sessionToken); err != nil {
+						log.Debugw("CloseHandler", "error", err)
+						WriteError(w, err)
+						return
+					}
+
+					WriteSuccess(w)
+					return
+				}
+			}
+
 		}
 	})
+}
+
+func WriteSuccess(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	res := map[string]string{
+		"status": "OK",
+	}
+	json.NewEncoder(w).Encode(res)
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	e := map[string]string{
+		"error": err.Error(),
+	}
+	json.NewEncoder(w).Encode(e)
 }

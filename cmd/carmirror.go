@@ -21,6 +21,7 @@ var background bool
 var cid string
 var addr string
 var diff string
+var session string
 
 // root command
 var root = &cobra.Command{
@@ -50,15 +51,18 @@ var push *cobra.Command = &cobra.Command{
 			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s&background=%s", cid, addr, bgString)
 		}
 
-		res, err := doRemoteHTTPReq("POST", endpoint)
+		_, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		// TODO: proper response handling
-		fmt.Printf("pushed cid %s to:\n\t%s\n", cid, addr)
-		fmt.Printf("response = %s\n", res)
+		// TODO: get session id from response instead of hard coding knowledge here that session ids for the client are the address.
+		if background {
+			fmt.Printf("Opened background session: %s\n", addr)
+		} else {
+			fmt.Printf("Completed session: %s\n", addr)
+		}
 	},
 }
 
@@ -81,7 +85,12 @@ var pull = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("pulled cid %s from:\n\t%s\n", cid, addr)
+		// TODO: get session id from response instead of hard coding knowledge here that session ids for the client are the address.
+		if background {
+			fmt.Printf("Opened background session: %s\n", addr)
+		} else {
+			fmt.Printf("Completed session: %s\n", addr)
+		}
 	},
 }
 
@@ -108,6 +117,31 @@ var ls = &cobra.Command{
 	},
 }
 
+// close
+var close = &cobra.Command{
+	Use:   "close",
+	Short: "closes the client session",
+	Run: func(cmd *cobra.Command, args []string) {
+		endpoint := fmt.Sprintf("/close?session=%s", session)
+		res, err := doRemoteHTTPReq("POST", endpoint)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		log.Debugf("response: %s\n", res)
+
+		var prettyJSON bytes.Buffer
+		err = json.Indent(&prettyJSON, []byte(res), "", "  ")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("response:\n%s\n", prettyJSON.Bytes())
+	},
+}
+
 func init() {
 	root.PersistentFlags().StringVar(&defaultCmdAddr, "commands-address", defaultCmdAddr, "address to issue requests that control local carmirror")
 
@@ -124,7 +158,10 @@ func init() {
 	pull.MarkFlagRequired("cid")
 	pull.MarkFlagRequired("addr")
 
-	root.AddCommand(push, pull, ls)
+	close.Flags().StringVarP(&session, "session", "s", "", "session id to close")
+	close.MarkFlagRequired("session")
+
+	root.AddCommand(push, pull, ls, close)
 }
 
 func main() {

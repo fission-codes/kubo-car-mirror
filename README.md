@@ -69,10 +69,10 @@ You can interact with local CAR Mirror APIs using the `carmirror` CLI.
 
 ```
 # Push
-./cmd/carmirror push ...
+./cmd/carmirror push -c CID -a ADDR
 
 # Pull
-./cmd/carmirror pull ...
+./cmd/carmirror pull -c CID -a ADDR
 ```
 
 During development, you might want to run in a testbed with [iptb](https://github.com/ipfs/iptb). This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
@@ -102,10 +102,10 @@ ipfsi 0 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 
 # push CID from node 0 to node 1
-carmirrori 0 push QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 1)
+carmirrori 0 push -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 1)
 
 # OR pull CID from node 0 to node 1
-carmirrori 1 pull QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W $(cm_cli_remote_addr 0)
+carmirrori 1 pull -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 0)
 
 # Confirm push in logs from node 0
 iptb_logs 0
