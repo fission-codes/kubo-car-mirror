@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	instrumented "github.com/fission-codes/go-car-mirror/core/instrumented"
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
@@ -48,9 +49,6 @@ type CarMirror struct {
 
 	// HTTP server for CAR Mirror requests
 	server *cmhttp.Server[cmipld.Cid, *cmipld.Cid]
-
-	// HTTP server accepting CAR Mirror requests
-	httpServer *http.Server
 }
 
 // Config encapsulates CAR Mirror configuration
@@ -90,7 +88,8 @@ func New(capi coreiface.CoreAPI, clientBlockStore *KuboStore, serverBlockStore *
 		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
 		BloomCapacity: 1024,
-		Instrument:    true,
+		// TODO: Make this configurable via config file
+		Instrument: instrumented.INSTRUMENT_ORCHESTRATOR | instrumented.INSTRUMENT_STORE | instrumented.INSTRUMENT_FILTER,
 	}
 
 	cm := &CarMirror{
