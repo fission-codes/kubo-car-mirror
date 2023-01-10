@@ -50,15 +50,18 @@ var push *cobra.Command = &cobra.Command{
 			endpoint = fmt.Sprintf("/push/new?cid=%s&addr=%s&background=%s", cid, addr, bgString)
 		}
 
-		res, err := doRemoteHTTPReq("POST", endpoint)
+		_, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		// TODO: proper response handling
-		fmt.Printf("pushed cid %s to:\n\t%s\n", cid, addr)
-		fmt.Printf("response = %s\n", res)
+		// TODO: get session id from response instead of hard coding knowledge here that session ids for the client are the address.
+		if background {
+			fmt.Printf("Opened background session: %s\n", addr)
+		} else {
+			fmt.Printf("Completed session: %s\n", addr)
+		}
 	},
 }
 
@@ -81,7 +84,12 @@ var pull = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("pulled cid %s from:\n\t%s\n", cid, addr)
+		// TODO: get session id from response instead of hard coding knowledge here that session ids for the client are the address.
+		if background {
+			fmt.Printf("Opened background session: %s\n", addr)
+		} else {
+			fmt.Printf("Completed session: %s\n", addr)
+		}
 	},
 }
 

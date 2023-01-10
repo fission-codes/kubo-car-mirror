@@ -163,10 +163,10 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				return
 			}
 
-			cm.client.CloseSource(p.Addr)
-
-			// TODO: This will hang eternally if things go wrong
 			if !p.Background {
+				// Close the session and wait for the other end to close
+				cm.client.CloseSource(p.Addr)
+
 				info, err := cm.client.SourceInfo(p.Addr)
 				for err == nil {
 					log.Debugf("client info: %s", info.String())
@@ -222,10 +222,10 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 				return
 			}
 
-			cm.client.CloseSink(p.Addr)
-
-			// TODO: This will hang eternally if things go wrong
 			if !p.Background {
+				// Close the session and wait for the other end to close
+				cm.client.CloseSink(p.Addr)
+
 				info, err := cm.client.SinkInfo(p.Addr)
 				for err == nil {
 					log.Debugf("client info: %s", info.String())
