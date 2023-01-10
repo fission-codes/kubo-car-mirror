@@ -148,9 +148,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(err.Error())
-				// w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -159,9 +157,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 			if err != nil {
 				log.Debugw("NewPushSessionHandler", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(err.Error())
-				// w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -180,9 +176,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 				if err != cmhttp.ErrInvalidSession {
 					log.Debugw("Closed with unexpected error", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 			}
@@ -212,9 +206,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(err.Error())
-				// w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -223,9 +215,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			if err != nil {
 				log.Debugw("NewPullSessionHandler", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(err.Error())
-				// w.Write([]byte(err.Error()))
+				WriteError(w, err)
 				return
 			}
 
@@ -271,9 +261,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.server.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -287,9 +275,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.server.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -304,9 +290,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.client.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -320,9 +304,7 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				sessionInfo, err := cm.client.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+					WriteError(w, err)
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -330,7 +312,6 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 
 			// Write the response
 			json.NewEncoder(w).Encode(sessions)
-			// w.WriteHeader(http.StatusOK)
 			return
 		}
 	})
@@ -353,21 +334,11 @@ func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 				if string(sessionToken) == p.Session {
 					if err := cm.client.CloseSink(sessionToken); err != nil {
 						log.Debugw("CloseHandler", "error", err)
-						w.WriteHeader(http.StatusInternalServerError)
-						// TODO: encode in JSON
-						e := map[string]string{
-							"error": err.Error(),
-						}
-						json.NewEncoder(w).Encode(e)
-						// w.Write([]byte(err.Error()))
+						WriteError(w, err)
 						return
 					}
 
-					w.WriteHeader(http.StatusOK)
-					e := map[string]string{
-						"status": "OK",
-					}
-					json.NewEncoder(w).Encode(e)
+					WriteSuccess(w)
 
 					return
 				}
@@ -377,26 +348,31 @@ func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 				if string(sessionToken) == p.Session {
 					if err := cm.client.CloseSource(sessionToken); err != nil {
 						log.Debugw("CloseHandler", "error", err)
-						w.WriteHeader(http.StatusInternalServerError)
-						// TODO: encode in JSON
-						e := map[string]string{
-							"error": err.Error(),
-						}
-						json.NewEncoder(w).Encode(e)
-						// w.Write([]byte(err.Error()))
+						WriteError(w, err)
 						return
 					}
 
-					w.WriteHeader(http.StatusOK)
-					e := map[string]string{
-						"status": "OK",
-					}
-					json.NewEncoder(w).Encode(e)
-
+					WriteSuccess(w)
 					return
 				}
 			}
 
 		}
 	})
+}
+
+func WriteSuccess(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	res := map[string]string{
+		"status": "OK",
+	}
+	json.NewEncoder(w).Encode(res)
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	e := map[string]string{
+		"error": err.Error(),
+	}
+	json.NewEncoder(w).Encode(e)
 }
