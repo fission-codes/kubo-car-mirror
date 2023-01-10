@@ -21,6 +21,7 @@ var background bool
 var cid string
 var addr string
 var diff string
+var session string
 
 // root command
 var root = &cobra.Command{
@@ -116,6 +117,31 @@ var ls = &cobra.Command{
 	},
 }
 
+// close
+var close = &cobra.Command{
+	Use:   "close",
+	Short: "closes the client session",
+	Run: func(cmd *cobra.Command, args []string) {
+		endpoint := fmt.Sprintf("/close?session=%s", session)
+		res, err := doRemoteHTTPReq("POST", endpoint)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		log.Debugf("response: %s\n", res)
+
+		var prettyJSON bytes.Buffer
+		err = json.Indent(&prettyJSON, []byte(res), "", "  ")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("response:\n%s\n", prettyJSON.Bytes())
+	},
+}
+
 func init() {
 	root.PersistentFlags().StringVar(&defaultCmdAddr, "commands-address", defaultCmdAddr, "address to issue requests that control local carmirror")
 
@@ -132,7 +158,10 @@ func init() {
 	pull.MarkFlagRequired("cid")
 	pull.MarkFlagRequired("addr")
 
-	root.AddCommand(push, pull, ls)
+	close.Flags().StringVarP(&session, "session", "s", "", "session id to close")
+	close.MarkFlagRequired("session")
+
+	root.AddCommand(push, pull, ls, close)
 }
 
 func main() {

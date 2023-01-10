@@ -149,7 +149,8 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				json.NewEncoder(w).Encode(err.Error())
+				// w.Write([]byte(err.Error()))
 				return
 			}
 
@@ -159,11 +160,14 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			if err != nil {
 				log.Debugw("NewPushSessionHandler", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				json.NewEncoder(w).Encode(err.Error())
+				// w.Write([]byte(err.Error()))
 				return
 			}
 
 			if !p.Background {
+				// TODO: This close is intentionally only being called if the job runs in the background.  It may make
+				// more sense to not conflate background with not closing though.
 				// Close the session and wait for the other end to close
 				cm.client.CloseSource(p.Addr)
 
@@ -177,7 +181,8 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				if err != cmhttp.ErrInvalidSession {
 					log.Debugw("Closed with unexpected error", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 			}
@@ -208,7 +213,8 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				json.NewEncoder(w).Encode(err.Error())
+				// w.Write([]byte(err.Error()))
 				return
 			}
 
@@ -218,7 +224,8 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			if err != nil {
 				log.Debugw("NewPullSessionHandler", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				json.NewEncoder(w).Encode(err.Error())
+				// w.Write([]byte(err.Error()))
 				return
 			}
 
@@ -236,7 +243,8 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 				if err != cmhttp.ErrInvalidSession {
 					log.Debugw("Closed with unexpected error", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 			}
@@ -264,7 +272,8 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -279,7 +288,8 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -295,7 +305,8 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -310,7 +321,8 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					json.NewEncoder(w).Encode(err.Error())
+					// w.Write([]byte(err.Error()))
 					return
 				}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
@@ -325,14 +337,66 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 }
 
 type CloseParams struct {
+	Session string
 }
 
 func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			p := CloseParams{}
+			p := CloseParams{
+				Session: r.FormValue("session"),
+			}
 			log.Debugw("CloseHandler", "params", p)
+
+			for _, sessionToken := range cm.client.SinkSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CloseSink(sessionToken); err != nil {
+						log.Debugw("CloseHandler", "error", err)
+						w.WriteHeader(http.StatusInternalServerError)
+						// TODO: encode in JSON
+						e := map[string]string{
+							"error": err.Error(),
+						}
+						json.NewEncoder(w).Encode(e)
+						// w.Write([]byte(err.Error()))
+						return
+					}
+
+					w.WriteHeader(http.StatusOK)
+					e := map[string]string{
+						"status": "OK",
+					}
+					json.NewEncoder(w).Encode(e)
+
+					return
+				}
+			}
+
+			for _, sessionToken := range cm.client.SourceSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CloseSource(sessionToken); err != nil {
+						log.Debugw("CloseHandler", "error", err)
+						w.WriteHeader(http.StatusInternalServerError)
+						// TODO: encode in JSON
+						e := map[string]string{
+							"error": err.Error(),
+						}
+						json.NewEncoder(w).Encode(e)
+						// w.Write([]byte(err.Error()))
+						return
+					}
+
+					w.WriteHeader(http.StatusOK)
+					e := map[string]string{
+						"status": "OK",
+					}
+					json.NewEncoder(w).Encode(e)
+
+					return
+				}
+			}
+
 		}
 	})
 }
