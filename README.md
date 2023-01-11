@@ -133,6 +133,9 @@ carmirrori 0 stats -s http://localhost:2505
 # Close session
 carmirrori 0 close -s http://localhost:2505
 
+# Cancel session, for forcibly closing
+carmirrori 0 cancel -s http://localhost:2505
+
 # shutdown and cleanup
 iptb_stop
 iptb_remove

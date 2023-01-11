@@ -136,6 +136,30 @@ var close = &cobra.Command{
 	},
 }
 
+var cancel = &cobra.Command{
+	Use:   "cancel",
+	Short: "cancels the client session",
+	Run: func(cmd *cobra.Command, args []string) {
+		endpoint := fmt.Sprintf("/cancel?session=%s", session)
+		res, err := doRemoteHTTPReq("POST", endpoint)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		log.Debugf("response: %s\n", res)
+
+		var prettyJSON bytes.Buffer
+		err = json.Indent(&prettyJSON, []byte(res), "", "  ")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("response:\n%s\n", prettyJSON.Bytes())
+	},
+}
+
 var stats = &cobra.Command{
 	Use:   "stats",
 	Short: "displays stats about the session",
@@ -179,9 +203,12 @@ func init() {
 	close.Flags().StringVarP(&session, "session", "s", "", "session id to close")
 	close.MarkFlagRequired("session")
 
+	cancel.Flags().StringVarP(&session, "session", "s", "", "session id to cancel")
+	cancel.MarkFlagRequired("session")
+
 	stats.Flags().StringVarP(&session, "session", "s", "", "session id to display stats for")
 
-	root.AddCommand(push, pull, ls, close, stats)
+	root.AddCommand(push, pull, ls, close, stats, cancel)
 }
 
 func main() {
