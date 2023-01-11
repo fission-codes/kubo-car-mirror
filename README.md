@@ -86,6 +86,10 @@ source test/lib/carmirror-lib.sh
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 CM_TMP=$(mktemp -d "/tmp/carmirror_tests.$DATE.XXXXXX") || die "could not 'mktemp -d /tmp/carmirror_tests.$DATE.XXXXXX'"
 
+# Stop and remove current testbed if started
+iptb_stop
+iptb_remove
+
 # Create a 2 node testbed
 iptb_new
 
@@ -101,11 +105,11 @@ ipfsi 0 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 # confirm CID is not on node 1
 ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 
-# push CID from node 0 to node 1
-carmirrori 0 push -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 1)
+# push CID from node 0 to node 1, in background so we can see session with ls output
+carmirrori 0 push -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 1) -b
 
 # OR pull CID from node 0 to node 1
-carmirrori 1 pull -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 0)
+carmirrori 1 pull -c QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W -a $(cm_cli_remote_addr 0) -b
 
 # Confirm push in logs from node 0
 iptb_logs 0
@@ -115,6 +119,13 @@ iptb_logs 1
 
 # confirm CID is on node 1 now
 ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
+
+# See running sessions
+carmirrori 0 ls
+carmirrori 1 ls
+
+# Close session
+carmirrori 0 close -s http://localhost:2505
 
 # shutdown and cleanup
 iptb_stop
