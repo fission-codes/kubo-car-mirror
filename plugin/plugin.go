@@ -104,6 +104,7 @@ func (p *CarMirrorPlugin) listenLocalCommands() error {
 	m.Handle("/pull/new", p.carmirror.NewPullSessionHandler())
 	m.Handle("/ls", p.carmirror.LsHandler())
 	m.Handle("/close", p.carmirror.CloseHandler())
+	m.Handle("/stats", p.carmirror.StatsHandler())
 	return http.ListenAndServe(p.HTTPCommandsAddr, m)
 }
 

@@ -380,6 +380,36 @@ func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 	})
 }
 
+type StatsParams struct {
+	Session string
+}
+
+func (cm *CarMirror) StatsHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := StatsParams{
+				Session: r.FormValue("session"),
+			}
+			log.Debugw("StatsHandler", "params", p)
+
+			snapshot := stats.GLOBAL_REPORTING.Snapshot()
+			if p.Session != "" {
+				snapshot = snapshot.Filter(p.Session)
+			}
+
+			b, err := snapshot.MarshalJSON()
+			if err != nil {
+				log.Debugw("StatsHandler", "error", err)
+				WriteError(w, err)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
+		}
+	})
+}
+
 func WriteSuccess(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 	res := map[string]string{

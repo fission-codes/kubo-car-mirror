@@ -124,6 +124,12 @@ ipfsi 1 get QmWXCR7ZwcQpvzJA5fjkQMJTe2rwJgYUtoSxBXFZ3uBY1W --offline -o $CM_TMP
 carmirrori 0 ls
 carmirrori 1 ls
 
+# Get all stats
+carmirrori 0 stats
+
+# Get stats for specific session
+carmirrori 0 stats -s http://localhost:2505
+
 # Close session
 carmirrori 0 close -s http://localhost:2505
 
