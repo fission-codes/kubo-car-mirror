@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	instrumented "github.com/fission-codes/go-car-mirror/core/instrumented"
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
+	stats "github.com/fission-codes/go-car-mirror/stats"
 	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
@@ -242,7 +244,13 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 	})
 }
 
+// TODO: Any params?
 type LsParams struct {
+}
+
+type LsResponse struct {
+	SessionId   string
+	SessionInfo string
 }
 
 func (cm *CarMirror) LsHandler() http.HandlerFunc {
@@ -251,33 +259,41 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 		case "POST":
 			p := LsParams{}
 			log.Debugw("LsHandler", "params", p)
-			sessions := make([]string, 0)
+
+			sessionMap := make(map[string]LsResponse)
+			sessions := make([]LsResponse, 0)
+
+			// Start off with the list of sessions from the stats, so they are returned even if closed.
+			// TODO: This is error prone since we're assuming prefixes (i.e. keys) in the snapshot are session ids.
+			// Currently that is true, but it may not always be true.
+			for _, key := range stats.GLOBAL_REPORTING.Snapshot().Keys() {
+				session := strings.Split(key, ".")[0]
+				sessionMap[session] = LsResponse{SessionId: session, SessionInfo: "unknown"}
+			}
 
 			log.Debugw("LsHandler", "server.sinkSessions", cm.server.SinkSessions())
 			sessionTokens := cm.server.SinkSessions()
 			for _, sessionToken := range sessionTokens {
-				sessions = append(sessions, string(sessionToken))
-
 				sessionInfo, err := cm.server.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					WriteError(w, err)
 					return
 				}
+				sessionMap[string(sessionToken)] = LsResponse{SessionId: string(sessionToken), SessionInfo: sessionInfo.String()}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
 			log.Debugw("LsHandler", "server.sourceSessions", cm.server.SourceSessions())
 			sessionTokens = cm.server.SourceSessions()
 			for _, sessionToken := range sessionTokens {
-				sessions = append(sessions, string(sessionToken))
-
 				sessionInfo, err := cm.server.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					WriteError(w, err)
 					return
 				}
+				sessionMap[string(sessionToken)] = LsResponse{SessionId: string(sessionToken), SessionInfo: sessionInfo.String()}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
@@ -285,32 +301,35 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 			// TODO: update client.SinkSessions to return a slice of session tokens instead of strings
 			clientSessionTokens := cm.client.SinkSessions()
 			for _, sessionToken := range clientSessionTokens {
-				sessions = append(sessions, string(sessionToken))
-
 				sessionInfo, err := cm.client.SinkInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					WriteError(w, err)
 					return
 				}
+				sessionMap[string(sessionToken)] = LsResponse{SessionId: string(sessionToken), SessionInfo: sessionInfo.String()}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
 			log.Debugw("LsHandler", "client.sourceSessions", cm.client.SourceSessions())
 			clientSessionTokens = cm.client.SourceSessions()
 			for _, sessionToken := range clientSessionTokens {
-				sessions = append(sessions, string(sessionToken))
-
 				sessionInfo, err := cm.client.SourceInfo(sessionToken)
 				if err != nil {
 					log.Debugw("LsHandler", "error", err)
 					WriteError(w, err)
 					return
 				}
+				sessionMap[string(sessionToken)] = LsResponse{SessionId: string(sessionToken), SessionInfo: sessionInfo.String()}
 				log.Debugw("LsHandler", "sessionInfo", sessionInfo)
 			}
 
+			for _, session := range sessionMap {
+				sessions = append(sessions, session)
+			}
+
 			// Write the response
+			// TODO: Sort them?
 			json.NewEncoder(w).Encode(sessions)
 			return
 		}
