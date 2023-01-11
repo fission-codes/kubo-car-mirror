@@ -380,6 +380,50 @@ func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 	})
 }
 
+type CancelParams struct {
+	Session string
+}
+
+func (cm *CarMirror) CancelHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p := CancelParams{
+				Session: r.FormValue("session"),
+			}
+			log.Debugw("CancelHandler", "params", p)
+
+			for _, sessionToken := range cm.client.SinkSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CancelSink(sessionToken); err != nil {
+						log.Debugw("CancelHandler", "error", err)
+						WriteError(w, err)
+						return
+					}
+
+					WriteSuccess(w)
+
+					return
+				}
+			}
+
+			for _, sessionToken := range cm.client.SourceSessions() {
+				if string(sessionToken) == p.Session {
+					if err := cm.client.CancelSource(sessionToken); err != nil {
+						log.Debugw("CancelHandler", "error", err)
+						WriteError(w, err)
+						return
+					}
+
+					WriteSuccess(w)
+					return
+				}
+			}
+
+		}
+	})
+}
+
 type StatsParams struct {
 	Session string
 }
