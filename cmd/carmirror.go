@@ -23,7 +23,6 @@ var addr string
 var diff string
 var session string
 
-// root command
 var root = &cobra.Command{
 	Use:   "carmirror",
 	Short: "carmirror is a tool for efficiently diffing, deduplicating, packaging, and transmitting IPLD data from a source node to a sink node.",
@@ -31,11 +30,9 @@ var root = &cobra.Command{
 https://github.com/fission-codes/kubo-car-mirror`,
 }
 
-// push
 var push *cobra.Command = &cobra.Command{
 	Use:   "push",
 	Short: "copy cid from local repo to remote addr",
-	// Args:  cobra.
 	Run: func(cmd *cobra.Command, args []string) {
 		var bgString string
 		if background {
@@ -66,7 +63,6 @@ var push *cobra.Command = &cobra.Command{
 	},
 }
 
-// pull
 var pull = &cobra.Command{
 	Use:   "pull",
 	Short: "copy remote cid from remote addr to local repo",
@@ -94,7 +90,6 @@ var pull = &cobra.Command{
 	},
 }
 
-// ls
 var ls = &cobra.Command{
 	Use:   "ls",
 	Short: "list all active transfers",
@@ -117,12 +112,35 @@ var ls = &cobra.Command{
 	},
 }
 
-// close
 var close = &cobra.Command{
 	Use:   "close",
 	Short: "closes the client session",
 	Run: func(cmd *cobra.Command, args []string) {
 		endpoint := fmt.Sprintf("/close?session=%s", session)
+		res, err := doRemoteHTTPReq("POST", endpoint)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		log.Debugf("response: %s\n", res)
+
+		var prettyJSON bytes.Buffer
+		err = json.Indent(&prettyJSON, []byte(res), "", "  ")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("response:\n%s\n", prettyJSON.Bytes())
+	},
+}
+
+var stats = &cobra.Command{
+	Use:   "stats",
+	Short: "displays stats about the session",
+	Run: func(cmd *cobra.Command, args []string) {
+		endpoint := fmt.Sprintf("/stats?session=%s", session)
 		res, err := doRemoteHTTPReq("POST", endpoint)
 		if err != nil {
 			fmt.Println(err.Error())
@@ -161,7 +179,9 @@ func init() {
 	close.Flags().StringVarP(&session, "session", "s", "", "session id to close")
 	close.MarkFlagRequired("session")
 
-	root.AddCommand(push, pull, ls, close)
+	stats.Flags().StringVarP(&session, "session", "s", "", "session id to display stats for")
+
+	root.AddCommand(push, pull, ls, close, stats)
 }
 
 func main() {
