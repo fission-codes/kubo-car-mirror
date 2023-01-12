@@ -172,4 +172,6 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 
 ## Acknowledgements
 
-A big thank you 🙏 to the [Qri](https://github.com/qri-io) team, whose [Dsync](https://github.com/qri-io/dag) project helped save a ton of time in getting this codebase started.
+Huge thanks 🙏 to [Jonathan Essex](https://github.com/softwareplumber), whose design and implementation of [go-car-mirror](https://github.com/fission-codes/go-car-mirror) does all the heavy lifting for this project.
+
+A big thank you to the [Qri](https://github.com/qri-io) team, whose [Dsync](https://github.com/qri-io/dag) project helped save a ton of time in getting a Kubo plugin project like this up and running.
