@@ -70,11 +70,10 @@ func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 	log.Debugw("CarMirrorPlugin", "method", "Start")
 
-	clientBlockStore := carmirror.NewKuboStore(capi)
-	serverBlockStore := carmirror.NewKuboStore(capi)
+	blockStore := carmirror.NewKuboStore(capi)
 
 	var err error
-	p.carmirror, err = carmirror.New(capi, clientBlockStore, serverBlockStore, func(cfg *carmirror.Config) {
+	p.carmirror, err = carmirror.New(capi, blockStore, func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
 		cfg.MaxBatchSize = 32 // p.MaxBatchSize
 	})

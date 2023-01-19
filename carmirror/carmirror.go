@@ -40,11 +40,8 @@ type CarMirror struct {
 	// CoreAPI
 	capi coreiface.CoreAPI
 
-	// Client block store
-	clientBlockStore *KuboStore
-
-	// Server block store
-	serverBlockStore *KuboStore
+	// The block store
+	blockStore *KuboStore
 
 	// HTTP client for CAR Mirror requests
 	client *cmhttp.Client[cmipld.Cid, *cmipld.Cid]
@@ -73,7 +70,7 @@ func (cfg *Config) Validate() error {
 }
 
 // New creates a local CAR Mirror service.
-func New(capi coreiface.CoreAPI, clientBlockStore *KuboStore, serverBlockStore *KuboStore, opts ...func(cfg *Config)) (*CarMirror, error) {
+func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config)) (*CarMirror, error) {
 	// Add default stuff to the config
 	cfg := &Config{}
 
@@ -95,12 +92,11 @@ func New(capi coreiface.CoreAPI, clientBlockStore *KuboStore, serverBlockStore *
 	}
 
 	cm := &CarMirror{
-		cfg:              cfg,
-		capi:             capi,
-		clientBlockStore: clientBlockStore,
-		serverBlockStore: serverBlockStore,
-		client:           cmhttp.NewClient[cmipld.Cid](clientBlockStore, cmConfig),
-		server:           cmhttp.NewServer[cmipld.Cid](serverBlockStore, cmConfig),
+		cfg:        cfg,
+		capi:       capi,
+		blockStore: blockStore,
+		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmConfig),
+		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmConfig),
 	}
 
 	return cm, nil
