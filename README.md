@@ -48,7 +48,8 @@ git add .
 git commit -m "Add build-carmirror make target"
 ```
 
-Push your changes to your branch.  Now you will be able to clone the branch of your kubo fork and just run `make build-carmirror` to build kubo with the kubo-car-mirror plugin.
+Push your changes to your branch.  Now you will be able to clone the branch of your kubo fork and just run `make build-carmirror` to build kubo with the kubo-car-mirror plugin and then your normal kubo make targets, like `make build` and `make install`.
+
 The build will also install the `carmirror` CLI to `kubo/carmirror/cmd/carmirror/carmirror`.  This binary will be gitignore'd, similar to how the `ipfs` CLI's binary is gitignore'd, so you don't accidentally add a platform specific binary added to Git.
 
 By default the latest version of the main branch in kubo-car-mirror will be built.  If you want to build a specific version, you can set the `KUBO_CAR_MIRROR_GIT_VERSION` environment variable before building.
