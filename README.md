@@ -36,7 +36,7 @@ make build-local
 
 ## Building from kubo without sibling repo
 
-If you want to create a branch in your kubo fork that can be used to build kubo-car-mirror, first clone your kubo fork and set it up with the branch you want to use.
+If you want to create a branch in your kubo fork that can be used to build kubo-car-mirror, first clone your kubo fork and checkout the branch you want to use.
 Then do the following.
 
 ```
@@ -45,12 +45,13 @@ make setup-kubo-build
 cd ../kubo
 make build-carmirror
 git add .
-git commit -m "Add build-carmirror target"
+git commit -m "Add build-carmirror make target"
 ```
 
-Push your changes to your branch.  Now you will be able to clone your fork of kubo and just run `make build-carmirror` to build kubo with kubo-car-mirror.
-The build will also have the `carmirror` CLI located in `kubo/cmd/carmirror/carmirror`.  It is gitignore'd similar to how the `ipfs` CLI is gitignore'd,
-since you don't want a platform specific binary added to Git.
+Push your changes to your branch.  Now you will be able to clone the branch of your kubo fork and just run `make build-carmirror` to build kubo with the kubo-car-mirror plugin.
+The build will also install the `carmirror` CLI to `kubo/carmirror/cmd/carmirror/carmirror`.  This binary will be gitignore'd, similar to how the `ipfs` CLI's binary is gitignore'd, so you don't accidentally add a platform specific binary added to Git.
+
+By default the latest version of the main branch in kubo-car-mirror will be built.  If you want to build a specific version, you can set the `KUBO_CAR_MIRROR_GIT_VERSION` environment variable before building.
 
 ## Testing
 
