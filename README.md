@@ -34,6 +34,24 @@ make build
 make build-local
 ```
 
+## Building from kubo without sibling repo
+
+If you want to create a branch in your kubo fork that can be used to build kubo-car-mirror, first clone your kubo fork and set it up with the branch you want to use.
+Then do the following.
+
+```
+cd kubo-car-mirror
+make setup-kubo-build
+cd ../kubo
+make build-carmirror
+git add .
+git commit -m "Add build-carmirror target"
+```
+
+Push your changes to your branch.  Now you will be able to clone your fork of kubo and just run `make build-carmirror` to build kubo with kubo-car-mirror.
+The build will also have the `carmirror` CLI located in `kubo/cmd/carmirror/carmirror`.  It is gitignore'd similar to how the `ipfs` CLI is gitignore'd,
+since you don't want a platform specific binary added to Git.
+
 ## Testing
 
 ```
@@ -69,10 +87,10 @@ You can interact with local CAR Mirror APIs using the `carmirror` CLI.
 
 ```
 # Push
-./cmd/carmirror push -c CID -a ADDR
+./cmd/carmirror/carmirror push -c CID -a ADDR
 
 # Pull
-./cmd/carmirror pull -c CID -a ADDR
+./cmd/carmirror/carmirror pull -c CID -a ADDR
 ```
 
 During development, you might want to run in a testbed with [iptb](https://github.com/ipfs/iptb). This is essentially what happens in sharness tests, but gives you more flexibility in trying things out.
