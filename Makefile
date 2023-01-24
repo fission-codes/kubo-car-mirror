@@ -30,17 +30,13 @@ setup-plugin:
 	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror
 	cd ../kubo && go mod tidy
 
-setup-plugin-from-github:
-	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
-	echo "" >> ../kubo/plugin/loader/preload_list.tmp
-	echo "carmirror github.com/fission-codes/kubo-car-mirror/plugin *" >> ../kubo/plugin/loader/preload_list.tmp
-	mv ../kubo/plugin/loader/preload_list.tmp ../kubo/plugin/loader/preload_list
-	$(MAKE) -C ../kubo plugin/loader/preload.go
-	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror
-	cd ../kubo && go mod tidy
-	cd ../kubo && go get github.com/fission-codes/kubo-car-mirror/cmd/carmirror@$(KUBO_CAR_MIRROR_GIT_VERSION)
-	cd ../kubo && GOBIN=$(PWD)/../kubo/cmd/carmirror go install github.com/fission-codes/kubo-car-mirror/cmd/carmirror@$(KUBO_CAR_MIRROR_GIT_VERSION)
-	echo "Kubo now includes kubo-car-mirror.  Review changes and commit in the kubo repository."
+setup-kubo-build:
+	cp -R build/carmirror ../kubo/carmirror
+	echo "" >> ../kubo/Makefile
+	echo "build-carmirror:" >> ../kubo/Makefile
+	echo "	@gmake $@" >> ../kubo/Makefile
+	echo "" >> ../kubo/GNUmakefile
+	echo "include carmirror/Rules.mk" >> ../kubo/GNUmakefile
 
 build-plugin: setup-plugin
 	$(MAKE) -C ../kubo build
