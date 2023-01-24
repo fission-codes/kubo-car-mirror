@@ -1,5 +1,7 @@
 TEST_NAME = t0000-car-mirror
 
+KUBO_CAR_MIRROR_GIT_VERSION ?= $(shell git rev-parse --short HEAD)
+
 .PHONY: test
 
 default: all
@@ -16,7 +18,7 @@ setup-local:
 
 build-core:
 	go build ./...
-	go build -o ./cmd/carmirror ./cmd/carmirror.go
+	go build -o ./cmd/carmirror/carmirror ./cmd/carmirror/carmirror.go
 
 setup-plugin:
 	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
@@ -25,8 +27,20 @@ setup-plugin:
 	mv ../kubo/plugin/loader/preload_list.tmp ../kubo/plugin/loader/preload_list
 	$(MAKE) -C ../kubo plugin/loader/preload.go
 	cd ../kubo && go mod edit -replace=github.com/fission-codes/kubo-car-mirror@v0.0.0-unpublished=../kubo-car-mirror
-	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror@v0.0.0-unpublished
+	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror
 	cd ../kubo && go mod tidy
+
+setup-plugin-from-github:
+	grep -v carmirror ../kubo/plugin/loader/preload_list > ../kubo/plugin/loader/preload_list.tmp
+	echo "" >> ../kubo/plugin/loader/preload_list.tmp
+	echo "carmirror github.com/fission-codes/kubo-car-mirror/plugin *" >> ../kubo/plugin/loader/preload_list.tmp
+	mv ../kubo/plugin/loader/preload_list.tmp ../kubo/plugin/loader/preload_list
+	$(MAKE) -C ../kubo plugin/loader/preload.go
+	cd ../kubo && go get -d github.com/fission-codes/kubo-car-mirror
+	cd ../kubo && go mod tidy
+	cd ../kubo && go get github.com/fission-codes/kubo-car-mirror/cmd/carmirror@$(KUBO_CAR_MIRROR_GIT_VERSION)
+	cd ../kubo && GOBIN=$(PWD)/../kubo/cmd/carmirror go install github.com/fission-codes/kubo-car-mirror/cmd/carmirror@$(KUBO_CAR_MIRROR_GIT_VERSION)
+	echo "Kubo now includes kubo-car-mirror.  Review changes and commit in the kubo repository."
 
 build-plugin: setup-plugin
 	$(MAKE) -C ../kubo build
@@ -41,23 +55,23 @@ test-unit:
 	go test ./... -v --coverprofile=coverage.txt --covermode=atomic
 
 sharness:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror ../kubo/test/bin/carmirror
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror/carmirror ../kubo/test/bin/carmirror
 	$(MAKE) -C ../kubo/test/sharness $(TEST_NAME).sh
 	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/carmirror
 
 sharness-v:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror ../kubo/test/bin/carmirror
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror/carmirror ../kubo/test/bin/carmirror
 	$(MAKE) -C ../kubo/test/sharness deps
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh -v
 	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/carmirror
 
 sharness-no-deps:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror ../kubo/test/bin/carmirror
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror/carmirror ../kubo/test/bin/carmirror
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh
 	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/carmirror
 
 sharness-no-deps-v:
-	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror ../kubo/test/bin/carmirror
+	cp test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/ && cp -R test/sharness/$(TEST_NAME)-data ../kubo/test/sharness/ && cp ./cmd/carmirror/carmirror ../kubo/test/bin/carmirror
 	cd ../kubo/test/sharness && ./$(TEST_NAME).sh -v
 	rm -rf ../kubo/test/sharness/$(TEST_NAME).sh ../kubo/test/sharness/$(TEST_NAME)-data ../kubo/test/bin/carmirror
 
