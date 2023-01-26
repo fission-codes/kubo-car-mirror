@@ -372,6 +372,8 @@ func (cm *CarMirror) CloseHandler() http.HandlerFunc {
 				}
 			}
 
+			// If we get here, we didn't find the session
+			WriteError(w, fmt.Errorf("session not found"))
 		}
 	})
 }
@@ -416,6 +418,8 @@ func (cm *CarMirror) CancelHandler() http.HandlerFunc {
 				}
 			}
 
+			// If we get here, we didn't find the session
+			WriteError(w, fmt.Errorf("session not found"))
 		}
 	})
 }
