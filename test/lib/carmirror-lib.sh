@@ -116,4 +116,14 @@ iptb_logs() {
   iptb logs $node "$@"
 }
 
+iptb_tail() {
+  if [ $# -eq 0 ]; then
+    files=( $(ls ~/.iptb/testbeds/default/*/daemon.std*) )
+  else
+    files=( $(ls ~/.iptb/testbeds/default/$1/daemon.std*) )
+  fi
+
+  tail -f ${files[@]}
+}
+
 echo "*** See README.md for instructions on setting up a testbed and running tests locally. ***"
