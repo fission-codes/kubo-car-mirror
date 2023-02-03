@@ -62,7 +62,7 @@ carmirrori() {
   node="$1"
   shift
 
-  ./cmd/carmirror/carmirror --commands-address "$(cm_cli_commands_addr $node)" "$@"
+  time ./cmd/carmirror/carmirror --commands-address "$(cm_cli_commands_addr $node)" "$@"
 }
 
 iptb_new() {
