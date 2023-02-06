@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -218,7 +219,6 @@ func main() {
 }
 
 func doRemoteHTTPReq(method, endpoint string) (resMsg string, err error) {
-
 	url := fmt.Sprintf("%s%s", defaultCmdAddr, endpoint)
 	req, err := http.NewRequest(method, url, nil)
 	log.Debugf("req = %v", req)
@@ -237,6 +237,16 @@ func doRemoteHTTPReq(method, endpoint string) (resMsg string, err error) {
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if resBytes == nil {
 		return
+	}
+
+	// Handle errors in status codes
+	if res.StatusCode != 200 {
+		var prettyJSON bytes.Buffer
+		if err = json.Indent(&prettyJSON, []byte(resBytes), "", "  "); err != nil {
+			return "", err
+		}
+
+		return "", errors.New(prettyJSON.String())
 	}
 
 	resMsg = string(resBytes)

@@ -16,6 +16,7 @@ import (
 	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/pkg/errors"
 	"github.com/zeebo/xxh3"
 )
 
@@ -146,7 +147,7 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				WriteError(w, err)
+				WriteError(w, errors.Wrap(err, "failed to parse CID"))
 				return
 			}
 

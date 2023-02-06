@@ -7,6 +7,9 @@ IPFS_CMD_PATH=$IPFS_CMD_DIR/ipfs
 # If our ipfs cmd isn't in the path, iptb will use the default one
 export PATH=$IPFS_CMD_DIR:$KUBO_DIR/test/bin:$PATH
 export IPTB_ROOT="$HOME/.iptb"
+DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
+export CM_TMP=$(mktemp -d "/tmp/carmirror_tests.$DATE.XXXXXX") || die "could not 'mktemp -d /tmp/carmirror_tests.$DATE.XXXXXX'"
+
 
 ipfsi() {
   dir="$1"
@@ -135,9 +138,9 @@ iptb_tail() {
 }
 
 get_cid() {
-  rm -rf ../test/dir*
-  random-files ../test/dir1 > /dev/null
-  CID=$(ipfsi 0 add -Q --pin=false -r ../test/dir1)
+  rm -rf $CM_TMP/ciddir
+  random-files $CM_TMP/ciddir > /dev/null
+  CID=$(ipfsi 0 add -Q --pin=false -r $CM_TMP/ciddir)
   echo $CID
 }
 
