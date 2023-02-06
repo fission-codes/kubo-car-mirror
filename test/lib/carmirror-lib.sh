@@ -71,7 +71,9 @@ iptb_new() {
 }
 
 iptb_start() {
+  export GOLOG_LOG_LEVEL="error,kubo-car-mirror=debug,go-car-mirror=debug"
   iptb start
+  unset GOLOG_LOG_LEVEL
 }
 
 iptb_wait_stop() {
@@ -98,10 +100,16 @@ iptb_remove() {
 
 iptb_fresh() {
   iptb_stop
-  iptb_wait_stop
+  # iptb_wait_stop
   iptb_remove
   iptb_new
   iptb_start
+  ps -ef | grep ipfs | grep -v grep
+}
+
+iptb_fresh_and_tail() {
+  iptb_fresh
+  iptb_tail
 }
 
 iptb_nuke() {
@@ -124,6 +132,13 @@ iptb_tail() {
   fi
 
   tail -f ${files[@]}
+}
+
+get_cid() {
+  rm -rf ../test/dir*
+  random-files ../test/dir1 > /dev/null
+  CID=$(ipfsi 0 add -Q --pin=false -r ../test/dir1)
+  echo $CID
 }
 
 echo "*** See README.md for instructions on setting up a testbed and running tests locally. ***"
