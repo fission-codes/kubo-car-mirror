@@ -10,7 +10,7 @@ all: build test
 
 clean:
 	go clean ./...
-	cd ../kubo && git co -- go.* plugin/*
+	cd ../kubo && git checkout -- go.* plugin/*
 
 setup-local:
 	go mod edit -replace=github.com/fission-codes/go-car-mirror=../go-car-mirror
