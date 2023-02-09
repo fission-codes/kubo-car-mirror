@@ -170,8 +170,11 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 
 			if !p.Background {
 				select {
-				case <-session.Done():
+				case err := <-session.Done():
 					log.Debugw("NewPushSessionHandler", "session", "done")
+					if err != nil {
+						WriteError(w, err)
+					}
 					return
 				case <-time.After(10 * time.Second):
 					log.Debugw("NewPushSessionHandler", "session", "timeout")
@@ -228,8 +231,11 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			if !p.Background {
 				select {
-				case <-session.Done():
+				case err := <-session.Done():
 					log.Debugw("NewPullSessionHandler", "session", "done")
+					if err != nil {
+						WriteError(w, err)
+					}
 					return
 				case <-time.After(10 * time.Second):
 					log.Debugw("NewPullSessionHandler", "session", "timeout")
