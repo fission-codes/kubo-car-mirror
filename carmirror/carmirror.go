@@ -16,6 +16,7 @@ import (
 	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/pkg/errors"
 	"github.com/zeebo/xxh3"
 )
 
@@ -103,6 +104,7 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 }
 
 func (cm *CarMirror) StartRemote(ctx context.Context) error {
+	log.Debugw("enter", "object", "CarMirror", "method", "StartRemote")
 	if cm.server == nil {
 		return fmt.Errorf("CAR Mirror is not configured as a remote")
 	}
@@ -118,7 +120,6 @@ func (cm *CarMirror) StartRemote(ctx context.Context) error {
 		go cm.server.Start()
 	}
 
-	log.Debug("CAR Mirror remote started")
 	return nil
 }
 
@@ -146,12 +147,15 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				WriteError(w, err)
+				WriteError(w, errors.Wrap(err, "failed to parse CID"))
 				return
 			}
 
 			// Initiate the push
+			// TODO: This needs to run in a goroutine?
+			log.Debugw("before send", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
 			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
+			log.Debugw("after send", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
 
 			if err != nil {
 				log.Debugw("NewPushSessionHandler", "error", err)
@@ -163,7 +167,9 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				// TODO: This close is intentionally only being called if the job runs in the background.  It may make
 				// more sense to not conflate background with not closing though.
 				// Close the session and wait for the other end to close
+				log.Debugw("before close", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
 				cm.client.CloseSource(p.Addr)
+				log.Debugw("after close", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
 
 				info, err := cm.client.SourceInfo(p.Addr)
 				for err == nil {
@@ -209,7 +215,11 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			}
 
 			// Initiate the pull
+			// TODO: This needs to run in a goroutine?  I think we hang here sometimes.
+
+			log.Debugw("before receive", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
 			err = cm.client.Receive(p.Addr, cmipld.WrapCid(cid))
+			log.Debugw("after receive", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
 
 			if err != nil {
 				log.Debugw("NewPullSessionHandler", "error", err)
@@ -219,7 +229,9 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			if !p.Background {
 				// Close the session and wait for the other end to close
+				log.Debugw("before close", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
 				cm.client.CloseSink(p.Addr)
+				log.Debugw("after close", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
 
 				info, err := cm.client.SinkInfo(p.Addr)
 				for err == nil {

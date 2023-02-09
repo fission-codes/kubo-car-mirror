@@ -56,7 +56,7 @@ func (*CarMirrorPlugin) Version() string {
 }
 
 func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
-	log.Debugw("CarMirrorPlugin", "method", "Init")
+	log.Debugw("enter", "object", "CarMirrorPlugin", "method", "Init")
 	p.loadConfig(env.Config)
 
 	// Only set default log level if env var isn't set
@@ -68,7 +68,7 @@ func (p *CarMirrorPlugin) Init(env *plugin.Environment) error {
 }
 
 func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
-	log.Debugw("CarMirrorPlugin", "method", "Start")
+	log.Debugw("enter", "object", "CarMirrorPlugin", "method", "Start")
 
 	blockStore := carmirror.NewKuboStore(capi)
 
@@ -93,7 +93,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 }
 
 func (p *CarMirrorPlugin) Close() error {
-	log.Debugw("CarMirrorPlugin", "method", "Close")
+	log.Debugw("enter", "object", "CarMirrorPlugin", "method", "Close")
 	return nil
 }
 
