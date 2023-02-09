@@ -12,6 +12,9 @@ clean:
 	go clean ./...
 	cd ../kubo && git checkout -- go.* plugin/*
 
+update-go-car-mirror:
+	go get -u github.com/fission-codes/go-car-mirror@$(shell cd ../go-car-mirror && git rev-parse --short HEAD)
+
 setup-local:
 	go mod edit -replace=github.com/fission-codes/go-car-mirror=../go-car-mirror
 	cd ../kubo && go mod edit -replace=github.com/fission-codes/go-car-mirror=../go-car-mirror

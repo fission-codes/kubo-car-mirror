@@ -82,7 +82,7 @@ require (
 )
 
 require (
-	github.com/fission-codes/go-car-mirror v0.0.0-20230126145128-6923725a9c81
+	github.com/fission-codes/go-car-mirror v0.0.0-20230209183945-ad1c811456fb
 	github.com/ipfs/kubo v0.17.0
 	github.com/spf13/cobra v1.6.1
 	github.com/zeebo/xxh3 v1.0.2
