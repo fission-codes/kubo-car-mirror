@@ -151,37 +151,33 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				return
 			}
 
-			// Initiate the push
-			// TODO: This needs to run in a goroutine?
-			log.Debugw("before send", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
-			err = cm.client.Send(p.Addr, cmipld.WrapCid(cid))
-			log.Debugw("after send", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
+			session := cm.client.GetSourceSession(p.Addr)
 
-			if err != nil {
-				log.Debugw("NewPushSessionHandler", "error", err)
-				WriteError(w, err)
-				return
-			}
-
-			if !p.Background {
-				// TODO: This close is intentionally only being called if the job runs in the background.  It may make
-				// more sense to not conflate background with not closing though.
-				// Close the session and wait for the other end to close
-				log.Debugw("before close", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
-				cm.client.CloseSource(p.Addr)
-				log.Debugw("after close", "object", "CarMirror", "method", "NewPushSessionHandler", "cid", cid.String(), "addr", p.Addr)
-
-				info, err := cm.client.SourceInfo(p.Addr)
-				for err == nil {
-					log.Debugf("client info: %s", info.String())
-					time.Sleep(100 * time.Millisecond)
-					info, err = cm.client.SourceInfo(p.Addr)
-				}
-
-				if err != cmhttp.ErrInvalidSession {
-					log.Debugw("Closed with unexpected error", "error", err)
+			go func() {
+				if err := session.Enqueue(cmipld.WrapCid(cid)); err != nil {
+					log.Debugw("NewPushSessionHandler", "error", err)
 					WriteError(w, err)
 					return
+				}
+
+				// Close the source
+				if err := cm.client.CloseSource(p.Addr); err != nil {
+					log.Debugw("NewPushSessionHandler", "error", err)
+					WriteError(w, err)
+					return
+				}
+			}()
+
+			if !p.Background {
+				select {
+				case err := <-session.Done():
+					log.Debugw("NewPushSessionHandler", "session", "done")
+					if err != nil {
+						WriteError(w, err)
+					}
+					return
+				case <-time.After(10 * time.Second):
+					log.Debugw("NewPushSessionHandler", "session", "timeout")
 				}
 			}
 		}
@@ -210,42 +206,39 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 			// Parse the CID
 			cid, err := gocid.Parse(p.Cid)
 			if err != nil {
-				WriteError(w, err)
+				WriteError(w, errors.Wrap(err, "failed to parse CID"))
 				return
 			}
-
 			// Initiate the pull
-			// TODO: This needs to run in a goroutine?  I think we hang here sometimes.
-
 			log.Debugw("before receive", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
-			err = cm.client.Receive(p.Addr, cmipld.WrapCid(cid))
-			log.Debugw("after receive", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
 
-			if err != nil {
-				log.Debugw("NewPullSessionHandler", "error", err)
-				WriteError(w, err)
-				return
-			}
+			session := cm.client.GetSinkSession(p.Addr)
 
-			if !p.Background {
-				// Close the session and wait for the other end to close
-				log.Debugw("before close", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
-				cm.client.CloseSink(p.Addr)
-				log.Debugw("after close", "object", "CarMirror", "method", "NewPullSessionHandler", "cid", cid.String(), "addr", p.Addr)
-
-				info, err := cm.client.SinkInfo(p.Addr)
-				for err == nil {
-					log.Debugf("client info: %s", info.String())
-					time.Sleep(100 * time.Millisecond)
-					info, err = cm.client.SinkInfo(p.Addr)
+			go func() {
+				if err := session.Enqueue(cmipld.WrapCid(cid)); err != nil {
+					log.Debugw("NewPullSessionHandler", "error", err)
+					WriteError(w, err)
+					return
 				}
 
-				if err != cmhttp.ErrInvalidSession {
-					log.Debugw("Closed with unexpected error", "error", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(err.Error())
-					// w.Write([]byte(err.Error()))
+				// Close the sink
+				if err := cm.client.CloseSink(p.Addr); err != nil {
+					log.Debugw("NewPullSessionHandler", "error", err)
+					WriteError(w, err)
 					return
+				}
+			}()
+
+			if !p.Background {
+				select {
+				case err := <-session.Done():
+					log.Debugw("NewPullSessionHandler", "session", "done")
+					if err != nil {
+						WriteError(w, err)
+					}
+					return
+				case <-time.After(10 * time.Second):
+					log.Debugw("NewPullSessionHandler", "session", "timeout")
 				}
 			}
 		}

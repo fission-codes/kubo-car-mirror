@@ -54,6 +54,15 @@ The build will also install the `carmirror` CLI to `kubo/carmirror/cmd/carmirror
 
 By default the latest version of the main branch in kubo-car-mirror will be built.  If you want to build a specific version, you can set the `KUBO_CAR_MIRROR_GIT_VERSION` environment variable before building.
 
+## Updating to the latest version of go-car-mirror
+First make sure you have a sibling repo of go-car-mirror with the latest version on main pulled.  Then run the following command.
+
+```
+make update-go-car-mirror
+```
+
+Check in the changes to go.mod and go.sum.
+
 ## Testing
 
 ```
