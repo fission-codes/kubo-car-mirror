@@ -176,7 +176,8 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 						WriteError(w, err)
 					}
 					return
-				case <-time.After(10 * time.Second):
+				case <-time.After(10 * time.Minute):
+					// TODO: Unless we handle timeouts in a different manner, maybe make this default configurable plus overrideable per request
 					log.Debugw("NewPushSessionHandler", "session", "timeout")
 				}
 			}
@@ -237,7 +238,8 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 						WriteError(w, err)
 					}
 					return
-				case <-time.After(10 * time.Second):
+				case <-time.After(10 * time.Minute):
+					// TODO: Unless we handle timeouts in a different manner, maybe make this default configurable plus overrideable per request
 					log.Debugw("NewPullSessionHandler", "session", "timeout")
 				}
 			}
