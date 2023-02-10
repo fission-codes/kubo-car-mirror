@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	golog "github.com/ipfs/go-log"
 	"github.com/spf13/cobra"
@@ -226,7 +227,13 @@ func doRemoteHTTPReq(method, endpoint string) (resMsg string, err error) {
 		return
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	var httpClient = &http.Client{
+		// TODO: Decide timeouts, and possibly make settings configurable.
+		// We'll want different timeouts for different operations.
+		Timeout: time.Minute * 10,
+	}
+
+	res, err := httpClient.Do(req)
 	log.Debugf("res = %v", res)
 	if err != nil {
 		return
