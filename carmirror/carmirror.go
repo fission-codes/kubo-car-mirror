@@ -160,6 +160,10 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 					return
 				}
 
+				// Sleep for a bit to try to reproduce the issue
+				// time.Sleep(500 * time.Millisecond)
+				// This did not cause any hang for pushes.
+
 				// Close the source
 				if err := cm.client.CloseSource(p.Addr); err != nil {
 					log.Debugw("NewPushSessionHandler", "error", err)
@@ -222,8 +226,13 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 					return
 				}
 
+				// Sleep for a bit to see if the else block of the session Run method is hit before close.
+				// This causes the entire request to hang on the source side, with BEGIN_PROCESSING in SOURCE_WAITING.
+				// We clearly have issues with the session lifecycle, with wait states dependent on the order of operations on both sides.
+				// time.Sleep(500 * time.Millisecond)
+
 				// Close the sink
-				if err := cm.client.CloseSink(p.Addr); err != nil {
+				if err := session.Close(); err != nil {
 					log.Debugw("NewPullSessionHandler", "error", err)
 					WriteError(w, err)
 					return
@@ -239,6 +248,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 					}
 					return
 				case <-time.After(10 * time.Minute):
+					// TODO: Do we want this shorter?  In particular for CI so we can kill hung sessions instead of waiting way too long?
 					// TODO: Unless we handle timeouts in a different manner, maybe make this default configurable plus overrideable per request
 					log.Debugw("NewPullSessionHandler", "session", "timeout")
 				}
