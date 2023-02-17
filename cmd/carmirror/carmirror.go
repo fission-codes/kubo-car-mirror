@@ -114,30 +114,6 @@ var ls = &cobra.Command{
 	},
 }
 
-var close = &cobra.Command{
-	Use:   "close",
-	Short: "closes the client session",
-	Run: func(cmd *cobra.Command, args []string) {
-		endpoint := fmt.Sprintf("/close?session=%s", session)
-		res, err := doRemoteHTTPReq("POST", endpoint)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		log.Debugf("response: %s\n", res)
-
-		var prettyJSON bytes.Buffer
-		err = json.Indent(&prettyJSON, []byte(res), "", "  ")
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		fmt.Printf("response:\n%s\n", prettyJSON.Bytes())
-	},
-}
-
 var cancel = &cobra.Command{
 	Use:   "cancel",
 	Short: "cancels the client session",
@@ -202,15 +178,12 @@ func init() {
 	pull.MarkFlagRequired("cid")
 	pull.MarkFlagRequired("addr")
 
-	close.Flags().StringVarP(&session, "session", "s", "", "session id to close")
-	close.MarkFlagRequired("session")
-
 	cancel.Flags().StringVarP(&session, "session", "s", "", "session id to cancel")
 	cancel.MarkFlagRequired("session")
 
 	stats.Flags().StringVarP(&session, "session", "s", "", "session id to display stats for")
 
-	root.AddCommand(push, pull, ls, close, stats, cancel)
+	root.AddCommand(push, pull, ls, stats, cancel)
 }
 
 func main() {

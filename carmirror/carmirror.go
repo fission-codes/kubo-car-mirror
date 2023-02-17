@@ -151,21 +151,11 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				return
 			}
 
+			// Need to get session, enqueue it, run it.
 			session := cm.client.GetSourceSession(p.Addr)
 
 			go func() {
 				if err := session.Enqueue(cmipld.WrapCid(cid)); err != nil {
-					log.Debugw("NewPushSessionHandler", "error", err)
-					WriteError(w, err)
-					return
-				}
-
-				// Sleep for a bit to try to reproduce the issue
-				// time.Sleep(500 * time.Millisecond)
-				// This did not cause any hang for pushes.
-
-				// Close the source
-				if err := cm.client.CloseSource(p.Addr); err != nil {
 					log.Debugw("NewPushSessionHandler", "error", err)
 					WriteError(w, err)
 					return
@@ -221,18 +211,6 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 
 			go func() {
 				if err := session.Enqueue(cmipld.WrapCid(cid)); err != nil {
-					log.Debugw("NewPullSessionHandler", "error", err)
-					WriteError(w, err)
-					return
-				}
-
-				// Sleep for a bit to see if the else block of the session Run method is hit before close.
-				// This causes the entire request to hang on the source side, with BEGIN_PROCESSING in SOURCE_WAITING.
-				// We clearly have issues with the session lifecycle, with wait states dependent on the order of operations on both sides.
-				// time.Sleep(500 * time.Millisecond)
-
-				// Close the sink
-				if err := session.Close(); err != nil {
 					log.Debugw("NewPullSessionHandler", "error", err)
 					WriteError(w, err)
 					return
@@ -345,52 +323,6 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 			// TODO: Sort them?
 			json.NewEncoder(w).Encode(sessions)
 			return
-		}
-	})
-}
-
-type CloseParams struct {
-	Session string
-}
-
-func (cm *CarMirror) CloseHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			p := CloseParams{
-				Session: r.FormValue("session"),
-			}
-			log.Debugw("CloseHandler", "params", p)
-
-			for _, sessionToken := range cm.client.SinkSessions() {
-				if string(sessionToken) == p.Session {
-					if err := cm.client.CloseSink(sessionToken); err != nil {
-						log.Debugw("CloseHandler", "error", err)
-						WriteError(w, err)
-						return
-					}
-
-					WriteSuccess(w)
-
-					return
-				}
-			}
-
-			for _, sessionToken := range cm.client.SourceSessions() {
-				if string(sessionToken) == p.Session {
-					if err := cm.client.CloseSource(sessionToken); err != nil {
-						log.Debugw("CloseHandler", "error", err)
-						WriteError(w, err)
-						return
-					}
-
-					WriteSuccess(w)
-					return
-				}
-			}
-
-			// If we get here, we didn't find the session
-			WriteError(w, fmt.Errorf("session not found"))
 		}
 	})
 }
