@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cmbatch "github.com/fission-codes/go-car-mirror/batch"
 	instrumented "github.com/fission-codes/go-car-mirror/core/instrumented"
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
@@ -83,21 +84,24 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 		return nil, err
 	}
 
-	cmConfig := cmhttp.Config{
+	cmResponderConfig := cmbatch.Config{
 		MaxBatchSize:  cfg.MaxBatchSize,
-		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
 		BloomCapacity: 1024,
 		// TODO: Make this configurable via config file
 		Instrument: instrumented.INSTRUMENT_ORCHESTRATOR | instrumented.INSTRUMENT_STORE | instrumented.INSTRUMENT_FILTER,
 	}
 
+	cmServerConfig := cmhttp.Config{
+		Address: cfg.HTTPRemoteAddr,
+	}
+
 	cm := &CarMirror{
 		cfg:        cfg,
 		capi:       capi,
 		blockStore: blockStore,
-		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmConfig),
-		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmConfig),
+		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmResponderConfig),
+		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmServerConfig, cmResponderConfig),
 	}
 
 	return cm, nil
