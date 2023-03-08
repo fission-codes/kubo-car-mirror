@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cmbatch "github.com/fission-codes/go-car-mirror/batch"
 	instrumented "github.com/fission-codes/go-car-mirror/core/instrumented"
 	"github.com/fission-codes/go-car-mirror/filter"
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
@@ -83,21 +84,24 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 		return nil, err
 	}
 
-	cmConfig := cmhttp.Config{
+	cmResponderConfig := cmbatch.Config{
 		MaxBatchSize:  cfg.MaxBatchSize,
-		Address:       cfg.HTTPRemoteAddr,
 		BloomFunction: HASH_FUNCTION,
 		BloomCapacity: 1024,
 		// TODO: Make this configurable via config file
 		Instrument: instrumented.INSTRUMENT_ORCHESTRATOR | instrumented.INSTRUMENT_STORE | instrumented.INSTRUMENT_FILTER,
 	}
 
+	cmServerConfig := cmhttp.Config{
+		Address: cfg.HTTPRemoteAddr,
+	}
+
 	cm := &CarMirror{
 		cfg:        cfg,
 		capi:       capi,
 		blockStore: blockStore,
-		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmConfig),
-		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmConfig),
+		client:     cmhttp.NewClient[cmipld.Cid](blockStore, cmResponderConfig),
+		server:     cmhttp.NewServer[cmipld.Cid](blockStore, cmServerConfig, cmResponderConfig),
 	}
 
 	return cm, nil
@@ -151,17 +155,11 @@ func (cm *CarMirror) NewPushSessionHandler() http.HandlerFunc {
 				return
 			}
 
+			// Need to get session, enqueue it, run it.
 			session := cm.client.GetSourceSession(p.Addr)
 
 			go func() {
 				if err := session.Enqueue(cmipld.WrapCid(cid)); err != nil {
-					log.Debugw("NewPushSessionHandler", "error", err)
-					WriteError(w, err)
-					return
-				}
-
-				// Close the source
-				if err := cm.client.CloseSource(p.Addr); err != nil {
 					log.Debugw("NewPushSessionHandler", "error", err)
 					WriteError(w, err)
 					return
@@ -221,13 +219,6 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 					WriteError(w, err)
 					return
 				}
-
-				// Close the sink
-				if err := cm.client.CloseSink(p.Addr); err != nil {
-					log.Debugw("NewPullSessionHandler", "error", err)
-					WriteError(w, err)
-					return
-				}
 			}()
 
 			if !p.Background {
@@ -239,6 +230,7 @@ func (cm *CarMirror) NewPullSessionHandler() http.HandlerFunc {
 					}
 					return
 				case <-time.After(10 * time.Minute):
+					// TODO: Do we want this shorter?  In particular for CI so we can kill hung sessions instead of waiting way too long?
 					// TODO: Unless we handle timeouts in a different manner, maybe make this default configurable plus overrideable per request
 					log.Debugw("NewPullSessionHandler", "session", "timeout")
 				}
@@ -335,52 +327,6 @@ func (cm *CarMirror) LsHandler() http.HandlerFunc {
 			// TODO: Sort them?
 			json.NewEncoder(w).Encode(sessions)
 			return
-		}
-	})
-}
-
-type CloseParams struct {
-	Session string
-}
-
-func (cm *CarMirror) CloseHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			p := CloseParams{
-				Session: r.FormValue("session"),
-			}
-			log.Debugw("CloseHandler", "params", p)
-
-			for _, sessionToken := range cm.client.SinkSessions() {
-				if string(sessionToken) == p.Session {
-					if err := cm.client.CloseSink(sessionToken); err != nil {
-						log.Debugw("CloseHandler", "error", err)
-						WriteError(w, err)
-						return
-					}
-
-					WriteSuccess(w)
-
-					return
-				}
-			}
-
-			for _, sessionToken := range cm.client.SourceSessions() {
-				if string(sessionToken) == p.Session {
-					if err := cm.client.CloseSource(sessionToken); err != nil {
-						log.Debugw("CloseHandler", "error", err)
-						WriteError(w, err)
-						return
-					}
-
-					WriteSuccess(w)
-					return
-				}
-			}
-
-			// If we get here, we didn't find the session
-			WriteError(w, fmt.Errorf("session not found"))
 		}
 	})
 }
