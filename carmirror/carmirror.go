@@ -54,8 +54,8 @@ type CarMirror struct {
 
 // Config encapsulates CAR Mirror configuration
 type Config struct {
-	HTTPRemoteAddr string
-	MaxBatchSize   uint32
+	HTTPRemoteAddr    string
+	MaxBlocksPerRound uint32
 }
 
 // Validate confirms the configuration is valid
@@ -64,8 +64,8 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("HTTPRemoteAddr is required")
 	}
 
-	if cfg.MaxBatchSize < 1 {
-		return fmt.Errorf("MaxBatchSize must be a positive number")
+	if cfg.MaxBlocksPerRound < 1 {
+		return fmt.Errorf("MaxBlocksPerRound must be a positive number")
 	}
 
 	return nil
@@ -85,9 +85,9 @@ func New(capi coreiface.CoreAPI, blockStore *KuboStore, opts ...func(cfg *Config
 	}
 
 	cmResponderConfig := cmbatch.Config{
-		MaxBatchSize:  cfg.MaxBatchSize,
-		BloomFunction: HASH_FUNCTION,
-		BloomCapacity: 1024,
+		MaxBlocksPerRound: cfg.MaxBlocksPerRound,
+		BloomFunction:     HASH_FUNCTION,
+		BloomCapacity:     1024,
 		// TODO: Make this configurable via config file
 		Instrument: instrumented.INSTRUMENT_ORCHESTRATOR | instrumented.INSTRUMENT_STORE | instrumented.INSTRUMENT_FILTER,
 	}

@@ -30,17 +30,17 @@ type CarMirrorPlugin struct {
 	HTTPCommandsAddr string
 	// HTTPRemoteAddr is the address CAR Mirror will listen on for remote requests, which are protocol concerns.
 	// Defaults to `:2503`.
-	HTTPRemoteAddr string
-	MaxBatchSize   uint32
+	HTTPRemoteAddr    string
+	MaxBlocksPerRound uint32
 }
 
 // NewCarMirrorPlugin creates a CarMirrorPlugin with some sensible defaults
 func NewCarMirrorPlugin() *CarMirrorPlugin {
 	return &CarMirrorPlugin{
-		LogLevel:         "info",
-		HTTPRemoteAddr:   ":2503",
-		HTTPCommandsAddr: "127.0.0.1:2502",
-		MaxBatchSize:     100,
+		LogLevel:          "info",
+		HTTPRemoteAddr:    ":2503",
+		HTTPCommandsAddr:  "127.0.0.1:2502",
+		MaxBlocksPerRound: 100,
 	}
 }
 
@@ -75,7 +75,7 @@ func (p *CarMirrorPlugin) Start(capi coreiface.CoreAPI) error {
 	var err error
 	p.carmirror, err = carmirror.New(capi, blockStore, func(cfg *carmirror.Config) {
 		cfg.HTTPRemoteAddr = p.HTTPRemoteAddr
-		cfg.MaxBatchSize = 32 // p.MaxBatchSize
+		cfg.MaxBlocksPerRound = 32 // p.MaxBlocksPerRound
 	})
 	if err != nil {
 		return err
@@ -117,8 +117,8 @@ func (p *CarMirrorPlugin) loadConfig(cfg interface{}) {
 	if v := getString(cfg, "LogLevel"); v != "" {
 		p.LogLevel = v
 	}
-	if v, err := getUint32(cfg, "MaxBatchSize"); err != nil {
-		p.MaxBatchSize = v
+	if v, err := getUint32(cfg, "MaxBlocksPerRound"); err != nil {
+		p.MaxBlocksPerRound = v
 	}
 }
 

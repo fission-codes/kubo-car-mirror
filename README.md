@@ -193,7 +193,7 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.HTTPRemoteAddr '":2503"'
 
 # Configure max batch size
-../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBatchSize 32
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerRound 32
 
 # Disable the plugin
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Disabled true
