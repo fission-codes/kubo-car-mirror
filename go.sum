@@ -247,6 +247,8 @@ github.com/fission-codes/go-car-mirror v0.0.0-20230209183945-ad1c811456fb h1:fqc
 github.com/fission-codes/go-car-mirror v0.0.0-20230209183945-ad1c811456fb/go.mod h1:YIWeUrae+ldUOXZ1c+ykUBBY449gHFP7T7W0tQYEVhE=
 github.com/fission-codes/go-car-mirror v0.0.0-20230308173918-a8b2e88c3e71 h1:kxcOs1XiHgZoFAHnh03p7m7zyz9YucU/cnNdiUvci0w=
 github.com/fission-codes/go-car-mirror v0.0.0-20230308173918-a8b2e88c3e71/go.mod h1:YIWeUrae+ldUOXZ1c+ykUBBY449gHFP7T7W0tQYEVhE=
+github.com/fission-codes/go-car-mirror v0.0.0-20230313160033-69ac9f004aed h1:rgmZVZZr4zeigLlFZmrXBMfq1JYw3OGrG4/ajDq6Pa8=
+github.com/fission-codes/go-car-mirror v0.0.0-20230313160033-69ac9f004aed/go.mod h1:YIWeUrae+ldUOXZ1c+ykUBBY449gHFP7T7W0tQYEVhE=
 github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568/go.mod h1:xEzjJPgXI435gkrCt3MPfRiAkVrwSbHsst4LCFVfpJc=
 github.com/flynn/noise v1.0.0 h1:DlTHqmzmvcEiKj+4RYo/imoswx/4r6iBlCMfVtrMXpQ=
 github.com/flynn/noise v1.0.0/go.mod h1:xbMo+0i6+IGbYdJhF31t2eR1BIU0CYc12+BNAKwUTag=
