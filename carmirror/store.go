@@ -75,6 +75,35 @@ func (ks *KuboStore) Add(ctx context.Context, block cm.RawBlock[cmipld.Cid]) (cm
 	}
 }
 
+func (ks *KuboStore) AddMany(ctx context.Context, rawBlocks []cm.RawBlock[cmipld.Cid]) ([]cm.Block[cmipld.Cid], error) {
+	var ipfsBlock blocks.Block
+	var nodes []ipld.Node
+	var blks []cm.Block[cmipld.Cid]
+	for _, block := range rawBlocks {
+		if cmBlock, ok := block.(*cmipld.RawBlock); ok {
+			ipfsBlock = cmBlock.Unwrap()
+		} else {
+			if basicBlock, err := blocks.NewBlockWithCid(block.RawData(), block.Id().Unwrap()); err != nil {
+				return nil, err
+			} else {
+				ipfsBlock = basicBlock
+			}
+		}
+		if node, err := ipld.DefaultBlockDecoder.Decode(ipfsBlock); err != nil {
+			return nil, err
+		} else {
+			nodes = append(nodes, node)
+			blks = append(blks, cmipld.WrapBlock(node))
+		}
+	}
+
+	if err := ks.store.AddMany(ctx, nodes); err != nil {
+		return nil, err
+	} else {
+		return blks, nil
+	}
+}
+
 // There doesn't seem to be a clear way to list all the CIDs since the underlying
 // blockstore is not exposed in the core Kubo API. This method will therefore list
 // the cids of all pinned objects
