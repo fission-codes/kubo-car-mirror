@@ -195,6 +195,9 @@ CAR Mirror configuration currently resides in Kubo's plugin configuration.
 # Configure max batch size
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerRound 32
 
+# Configure max batch size for cold call push
+../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Config.MaxBlocksPerColdCall 32
+
 # Disable the plugin
 ../kubo/cmd/ipfs/ipfs config --json Plugins.Plugins.car-mirror.Disabled true
 ```
