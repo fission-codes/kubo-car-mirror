@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/fission-codes/kubo-car-mirror/carmirror"
+	coreiface "github.com/ipfs/boxo/coreiface"
 	golog "github.com/ipfs/go-log"
-	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	plugin "github.com/ipfs/kubo/plugin"
 )
 

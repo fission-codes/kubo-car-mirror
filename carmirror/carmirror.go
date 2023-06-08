@@ -14,9 +14,9 @@ import (
 	cmhttp "github.com/fission-codes/go-car-mirror/http"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
 	stats "github.com/fission-codes/go-car-mirror/stats"
+	coreiface "github.com/ipfs/boxo/coreiface"
 	gocid "github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log"
-	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/pkg/errors"
 	"github.com/zeebo/xxh3"
 )

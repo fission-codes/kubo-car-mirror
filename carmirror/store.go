@@ -7,10 +7,10 @@ import (
 	cm "github.com/fission-codes/go-car-mirror/core"
 	errors "github.com/fission-codes/go-car-mirror/errors"
 	cmipld "github.com/fission-codes/go-car-mirror/ipld"
+	kubo "github.com/ipfs/boxo/coreiface"
+	opts "github.com/ipfs/boxo/coreiface/options"
 	blocks "github.com/ipfs/go-block-format"
 	ipld "github.com/ipfs/go-ipld-format"
-	kubo "github.com/ipfs/interface-go-ipfs-core"
-	opts "github.com/ipfs/interface-go-ipfs-core/options"
 )
 
 type KuboStore struct {
