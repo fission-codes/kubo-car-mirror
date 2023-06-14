@@ -12,6 +12,8 @@
 
 Go implementation of [CAR Mirror](https://github.com/fission-codes/spec/tree/main/car-pool).
 
+Presentation at IPFS Thing 2023, by @walkah https://www.youtube.com/watch?v=UeSb7vC0K7Y
+
 ## Building
 
 kubo-car-mirror is implemented as a [Kubo Daemon Plugin](https://github.com/ipfs/kubo/blob/master/docs/plugins.md#daemon).
